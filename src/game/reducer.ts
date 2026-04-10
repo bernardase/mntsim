@@ -1,5 +1,5 @@
-import type { Action, GameState } from "./types";
-import { INITIAL_STATE, DEFAULT_PREP } from "./types";
+import type { Action, GameState, Weather } from "./types";
+import { INITIAL_STATE, DEFAULT_PREP, INLINE_ACTION_LABELS } from "./types";
 import {
   rollHourlyEvents,
   applyEvents,
@@ -23,6 +23,20 @@ import {
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+const WEATHER_ORDER: Weather[] = ["clear", "cloudy", "wind", "snow", "storm"];
+
+function driftWeather(current: Weather, progress: number): Weather {
+  const roll = Math.random();
+  if (roll > 0.30) return current;
+
+  const idx = WEATHER_ORDER.indexOf(current);
+  const altBias = progress > 0.5 ? 0.1 : 0;
+  if (Math.random() < 0.45 + altBias) {
+    return WEATHER_ORDER[Math.min(idx + 1, WEATHER_ORDER.length - 1)];
+  }
+  return WEATHER_ORDER[Math.max(idx - 1, 0)];
 }
 
 export function gameReducer(state: GameState, action: Action): GameState {
@@ -110,14 +124,19 @@ export function gameReducer(state: GameState, action: Action): GameState {
       if (effTemp < -5) coldDrain = 4;
       else if (effTemp < 0) coldDrain = 2;
 
+      const driftedWeather = driftWeather(next.weather, next.progress);
+
+      const HOURS_PER_STEP = 2;
+
       next = {
         ...next,
-        hoursHiked: state.hoursHiked + 1,
-        timeOfDay: (state.timeOfDay + 1) % 24,
-        hunger: clamp(next.hunger - 5, 0, 100),
-        sleep: clamp(next.sleep - 4, 0, 100),
-        water: clamp(next.water - waterDrain, 0, 100),
-        stamina: clamp(next.stamina - coldDrain, 0, 100),
+        hoursHiked: state.hoursHiked + HOURS_PER_STEP,
+        timeOfDay: (state.timeOfDay + HOURS_PER_STEP) % 24,
+        weather: driftedWeather,
+        hunger: clamp(next.hunger - 8 * HOURS_PER_STEP, 0, 100),
+        sleep: clamp(next.sleep - 6 * HOURS_PER_STEP, 0, 100),
+        water: clamp(next.water - waterDrain * HOURS_PER_STEP, 0, 100),
+        stamina: clamp(next.stamina - (3 + coldDrain) * HOURS_PER_STEP, 0, 100),
         currentEvents: events,
         log: [...state.log, { hour: state.hoursHiked, events }],
       };
@@ -188,10 +207,15 @@ export function gameReducer(state: GameState, action: Action): GameState {
       const choice = state.choices[action.index];
       if (!choice) return state;
 
+      const isInline = INLINE_ACTION_LABELS.has(choice.label);
+
+      if (!isInline && state.mainActionsThisHour >= 1) return state;
+
       const patch = choice.apply(state);
       let next: GameState = {
         ...state,
         ...patch,
+        mainActionsThisHour: isInline ? state.mainActionsThisHour : state.mainActionsThisHour + 1,
         log: state.log.map((l, i) =>
           i === state.log.length - 1 ? { ...l, choiceMade: choice.label } : l,
         ),
@@ -254,7 +278,13 @@ export function gameReducer(state: GameState, action: Action): GameState {
         };
       }
 
-      return gameReducer(next, { type: "ADVANCE_HOUR" });
+      if (!isInline) {
+        next = { ...next, mainActionsThisHour: 0 };
+        return gameReducer(next, { type: "ADVANCE_HOUR" });
+      }
+
+      const choices = generateChoices(next);
+      return { ...next, choices };
     }
 
     case "WAKE_UP": {
@@ -274,18 +304,40 @@ export function gameReducer(state: GameState, action: Action): GameState {
       const waterPerSleepHour = drinkCost * 0.3;
       const waterUsed = +(waterPerSleepHour * sleepDuration).toFixed(1);
 
-      let next: GameState = {
-        ...state,
-        phase: "climbing",
-        timeOfDay: wakeHour % 24,
-        hoursHiked: state.hoursHiked + sleepDuration,
-        sleep: clamp(state.sleep + sleepRestore, 0, 100),
-        stamina: clamp(state.stamina + staminaRestore, 0, 100),
-        hunger: clamp(state.hunger - 5 * Math.ceil(sleepDuration / 3), 0, 100),
-        foodSupply: Math.max(0, state.foodSupply - ps.mealCost),
-        waterSupply: Math.max(0, +(state.waterSupply - waterUsed).toFixed(1)),
-        pendingSleep: null,
-      };
+      let next: GameState;
+
+      if (ps.type === "hut") {
+        const startFood = computeStartingFoodSupply(state.prepConfig);
+        const startWater = computeStartingWaterSupply(state.prepConfig);
+        next = {
+          ...state,
+          phase: "climbing",
+          timeOfDay: wakeHour % 24,
+          hoursHiked: state.hoursHiked + sleepDuration,
+          stamina: Math.max(state.stamina, 90),
+          hunger: Math.max(state.hunger, 90),
+          sleep: Math.max(state.sleep, 90),
+          water: Math.max(state.water, 90),
+          foodSupply: startFood,
+          waterSupply: startWater,
+          pendingSleep: null,
+          mainActionsThisHour: 0,
+        };
+      } else {
+        next = {
+          ...state,
+          phase: "climbing",
+          timeOfDay: wakeHour % 24,
+          hoursHiked: state.hoursHiked + sleepDuration,
+          sleep: clamp(state.sleep + sleepRestore, 0, 100),
+          stamina: clamp(state.stamina + staminaRestore, 0, 100),
+          hunger: clamp(state.hunger - 5 * Math.ceil(sleepDuration / 3), 0, 100),
+          foodSupply: Math.max(0, state.foodSupply - ps.mealCost),
+          waterSupply: Math.max(0, +(state.waterSupply - waterUsed).toFixed(1)),
+          pendingSleep: null,
+          mainActionsThisHour: 0,
+        };
+      }
 
       if (next.hunger <= 0 || next.stamina <= 0 || next.water <= 0 || next.sleep <= 0) {
         return {
@@ -297,6 +349,19 @@ export function gameReducer(state: GameState, action: Action): GameState {
         };
       }
 
+      const narrative = buildNarrative(next, []);
+      const choices = generateChoices(next);
+      return { ...next, narrative, choices, currentEvents: [] };
+    }
+
+    case "BEGIN_DESCENT": {
+      if (state.phase !== "summit") return state;
+      const next: GameState = {
+        ...state,
+        phase: "climbing",
+        progress: 0.98,
+        mainActionsThisHour: 0,
+      };
       const narrative = buildNarrative(next, []);
       const choices = generateChoices(next);
       return { ...next, narrative, choices, currentEvents: [] };

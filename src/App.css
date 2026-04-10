@@ -110,6 +110,25 @@ body,
   font-size: 0.9rem;
 }
 
+.summit-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.secondary-btn {
+  background: var(--surface2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.secondary-btn:hover {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
 /* ── game layout ────────────────────────────────────────── */
 
 .game-layout {
@@ -417,6 +436,27 @@ body,
   font-family: "Inter", sans-serif;
 }
 
+.waypoint-hut-label {
+  fill: #facc15;
+  font-weight: 600;
+}
+
+.hut-roof {
+  fill: #b45309;
+  stroke: #d97706;
+  stroke-width: 1;
+}
+
+.hut-body {
+  fill: #92400e;
+  stroke: #d97706;
+  stroke-width: 0.8;
+}
+
+.hut-door {
+  fill: #451a03;
+}
+
 .player-marker {
   fill: var(--player);
 }
@@ -548,13 +588,29 @@ body,
   transition: border-color 0.15s, background 0.15s;
 }
 
-.choice-btn:hover {
+.choice-btn:hover:not(:disabled) {
   border-color: var(--accent);
   background: rgba(91, 156, 245, 0.07);
 }
 
+.choice-btn:disabled,
+.inline-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .choice-btn strong {
   font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.choice-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .choice-btn span {

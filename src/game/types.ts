@@ -112,6 +112,7 @@ export interface GameState {
   weather: Weather;
   doubleDistance: boolean;
   pendingSleep: PendingSleep | null;
+  mainActionsThisHour: number;    // max 1 per hour
   currentEvents: GameEvent[];
   choices: Choice[];
   narrative: string;
@@ -139,6 +140,7 @@ export const INITIAL_STATE: GameState = {
   weather: "clear",
   doubleDistance: false,
   pendingSleep: null,
+  mainActionsThisHour: 0,
   currentEvents: [],
   choices: [],
   narrative: "",
@@ -147,15 +149,29 @@ export const INITIAL_STATE: GameState = {
   prepModifiers: ZERO_MODIFIERS,
 };
 
+export const INLINE_ACTION_LABELS = new Set([
+  "Add a Layer",
+  "Remove a Layer",
+  "Put On Crampons",
+  "Take Off Crampons",
+  "Ready Ice Axe",
+  "Stow Ice Axe",
+  "Eat a Meal",
+  "Drink Water",
+]);
+
 export type Action =
   | { type: "START_PREP" }
   | { type: "SET_PREP"; config: PrepConfig }
   | { type: "CONFIRM_PREP" }
   | { type: "ADVANCE_HOUR" }
   | { type: "CHOOSE"; index: number }
-  | { type: "WAKE_UP"; wakeHour: number };
+  | { type: "WAKE_UP"; wakeHour: number }
+  | { type: "BEGIN_DESCENT" };
 
 export function formatTime(hour: number): string {
   const h = ((hour % 24) + 24) % 24;
-  return `${h.toString().padStart(2, "0")}:00`;
+  const period = h < 12 ? "AM" : "PM";
+  const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${display}:00 ${period}`;
 }

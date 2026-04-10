@@ -47,11 +47,44 @@ export default function App() {
     return <WakeUpScreen state={state} dispatch={dispatch} />;
   }
 
-  if (state.phase === "summit" || state.phase === "failed") {
+  if (state.phase === "summit") {
     return (
       <div className="end-screen">
-        <div className={`end-card ${state.phase}`}>
-          <h1>{state.phase === "summit" ? "Summit Reached!" : "Climb Failed"}</h1>
+        <div className="end-card summit">
+          <h1>Summit Reached!</h1>
+          <div className="narrative">
+            {state.narrative.split("\n").map((line, i) => (
+              <p key={i}>{line}</p>
+            ))}
+          </div>
+          <div className="end-stats">
+            <span>Hours Hiked: {state.hoursHiked}</span>
+            <span>Stamina: {Math.round(state.stamina)}</span>
+          </div>
+          <div className="summit-actions">
+            <button
+              className="start-btn"
+              onClick={() => dispatch({ type: "BEGIN_DESCENT" })}
+            >
+              Begin Descent
+            </button>
+            <button
+              className="start-btn secondary-btn"
+              onClick={() => dispatch({ type: "START_PREP" })}
+            >
+              New Climb
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.phase === "failed") {
+    return (
+      <div className="end-screen">
+        <div className="end-card failed">
+          <h1>Climb Failed</h1>
           <div className="narrative">
             {state.narrative.split("\n").map((line, i) => (
               <p key={i}>{line}</p>

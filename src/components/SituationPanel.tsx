@@ -1,6 +1,21 @@
 import type { GameState, Action } from "../game/types";
 import { INLINE_CHOICE_LABELS } from "./ClimbOverview";
 
+const ACTION_ICONS: Record<string, string> = {
+  "Push Forward": "🥾",
+  "Rest & Recover": "☕",
+  "Slow Down": "🐢",
+  "Normal Pace": "👟",
+  "Speed Up": "⚡",
+  "Eat a Meal": "🍽️",
+  "Drink Water": "💧",
+  "Sleep in Hut": "🏠",
+  "Sleep in Tent": "⛺",
+  "Shelter in Place": "🛡️",
+  "Descend": "⬇️",
+  "Save Teammate": "🤝",
+};
+
 interface Props {
   state: GameState;
   dispatch: React.Dispatch<Action>;
@@ -45,8 +60,14 @@ export default function SituationPanel({ state, dispatch }: Props) {
               key={index}
               className="choice-btn"
               onClick={() => dispatch({ type: "CHOOSE", index })}
+              disabled={state.mainActionsThisHour >= 1}
             >
-              <strong>{choice.label}</strong>
+              <strong>
+                {ACTION_ICONS[choice.label] && (
+                  <span className="choice-icon">{ACTION_ICONS[choice.label]}</span>
+                )}
+                {choice.label}
+              </strong>
               <span>{choice.description}</span>
             </button>
           ))}

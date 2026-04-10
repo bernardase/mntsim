@@ -90,13 +90,13 @@ export function nextWaypoint(progress: number): Waypoint | null {
 
 /**
  * How icy/snowy the terrain is at a given progress (0–1).
- * Lower sections are rocky trails; above the Grand Couloir it's mostly snow and ice.
+ * Chamonix → Les Houches is rocky hiking.
+ * From the Goûter Hut Trail (0.25) onward, ice and snow dominate.
  */
 export function icinessAtProgress(progress: number): number {
-  if (progress < 0.15) return 0;
-  if (progress < 0.30) return 0.15;
-  if (progress < 0.45) return 0.4;
-  if (progress < 0.60) return 0.7;
+  if (progress < 0.25) return 0;
+  if (progress < 0.40) return 0.5;
+  if (progress < 0.55) return 0.75;
   return 1.0;
 }
 

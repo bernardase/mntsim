@@ -141,7 +141,7 @@ const SMALL_GOOD: Omit<GameEvent, "id">[] = [
   },
 ];
 
-const SMALL_BAD: Omit<GameEvent, "id">[] = [
+const SMALL_BAD_BASE: Omit<GameEvent, "id">[] = [
   {
     size: "small",
     polarity: "bad",
@@ -166,25 +166,6 @@ const SMALL_BAD: Omit<GameEvent, "id">[] = [
   {
     size: "small",
     polarity: "bad",
-    title: "Slippery Ice",
-    description: "A patch of black ice slows your pace.",
-    effect: (s) => ({
-      stamina: clamp(s.stamina - (s.crampons ? 2 : 6) * PACE_FACTORS[s.pace].damageMult, 0, 100),
-      progress: clamp(s.progress - (s.crampons ? 0 : 0.01), 0, 1),
-    }),
-  },
-  {
-    size: "small",
-    polarity: "bad",
-    title: "Crampon Trouble",
-    description: "A crampon strap loosens. You stop to fix it in the cold.",
-    effect: (s) => s.crampons
-      ? { stamina: clamp(s.stamina - 5, 0, 100), crampons: false }
-      : {},
-  },
-  {
-    size: "small",
-    polarity: "bad",
     title: "Heavy Fog",
     description: "Visibility drops to metres. You slow to a crawl.",
     effect: (s) => ({ stamina: clamp(s.stamina - 3, 0, 100) }),
@@ -195,13 +176,6 @@ const SMALL_BAD: Omit<GameEvent, "id">[] = [
     title: "Spilled Rations",
     description: "Your pack tips and food scatters down the slope.",
     effect: (s) => ({ foodSupply: Math.max(0, s.foodSupply - 2) }),
-  },
-  {
-    size: "small",
-    polarity: "bad",
-    title: "Restless Night",
-    description: "Howling wind keeps you from resting.",
-    effect: (s) => ({ sleep: clamp(s.sleep - 10, 0, 100) }),
   },
   {
     size: "small",
@@ -228,6 +202,57 @@ const SMALL_BAD: Omit<GameEvent, "id">[] = [
   },
 ];
 
+const SMALL_BAD_ICE: Omit<GameEvent, "id">[] = [
+  {
+    size: "small",
+    polarity: "bad",
+    title: "Slippery Ice",
+    description: "A patch of black ice slows your pace.",
+    effect: (s) => ({
+      stamina: clamp(s.stamina - (s.crampons ? 3 : 12) * PACE_FACTORS[s.pace].damageMult, 0, 100),
+      progress: clamp(s.progress - (s.crampons ? 0 : 0.02), 0, 1),
+    }),
+  },
+  {
+    size: "small",
+    polarity: "bad",
+    title: "Crampon Trouble",
+    description: "A crampon strap loosens. You stop to fix it in the cold.",
+    effect: (s) => s.crampons
+      ? { stamina: clamp(s.stamina - 5, 0, 100), crampons: false }
+      : {},
+  },
+  {
+    size: "small",
+    polarity: "bad",
+    title: "Rockfall",
+    description: "Rocks clatter down from above. You press against the wall and dodge.",
+    effect: (s) => ({
+      stamina: clamp(s.stamina - 10 * PACE_FACTORS[s.pace].damageMult, 0, 100),
+    }),
+  },
+  {
+    size: "small",
+    polarity: "bad",
+    title: "Ice Axe Slip",
+    description: "Your boot loses grip on hard ice. Without a proper self-arrest you slide several metres.",
+    effect: (s) => ({
+      stamina: clamp(s.stamina - (s.iceAxe ? 3 : 15), 0, 100),
+      progress: clamp(s.progress - (s.iceAxe ? 0 : 0.02), 0, 1),
+    }),
+  },
+  {
+    size: "small",
+    polarity: "bad",
+    title: "Crevasse Near-Miss",
+    description: "The snow cracks under your foot — a hidden crevasse yawns below. You jump back just in time.",
+    effect: (s) => ({
+      stamina: clamp(s.stamina - 8, 0, 100),
+      sleep: clamp(s.sleep - 5, 0, 100),
+    }),
+  },
+];
+
 const MAJOR_GOOD: Omit<GameEvent, "id">[] = [
   {
     size: "major",
@@ -244,20 +269,7 @@ const MAJOR_GOOD: Omit<GameEvent, "id">[] = [
   },
 ];
 
-const MAJOR_BAD: Omit<GameEvent, "id">[] = [
-  {
-    size: "major",
-    polarity: "bad",
-    title: "Avalanche!",
-    description:
-      "A wall of snow thunders down the slope. You dive behind a rock. Your gear is buried.",
-    effect: (s) => ({
-      stamina: clamp(s.stamina - 25 * PACE_FACTORS[s.pace].damageMult, 0, 100),
-      foodSupply: Math.max(0, s.foodSupply - 3),
-      waterSupply: Math.max(0, +(s.waterSupply - 1.0).toFixed(1)),
-      progress: clamp(s.progress - 0.05, 0, 1),
-    }),
-  },
+const MAJOR_BAD_BASE: Omit<GameEvent, "id">[] = [
   {
     size: "major",
     polarity: "bad",
@@ -269,6 +281,48 @@ const MAJOR_BAD: Omit<GameEvent, "id">[] = [
       weather: "storm" as Weather,
     }),
   },
+];
+
+const MAJOR_BAD_ICE: Omit<GameEvent, "id">[] = [
+  {
+    size: "major",
+    polarity: "bad",
+    title: "Small Avalanche",
+    description:
+      "A slab of snow breaks loose above and slides toward you. You scramble sideways to avoid the worst of it.",
+    effect: (s) => ({
+      stamina: clamp(s.stamina - 12 * PACE_FACTORS[s.pace].damageMult, 0, 100),
+      foodSupply: Math.max(0, s.foodSupply - 1),
+      progress: clamp(s.progress - 0.02, 0, 1),
+    }),
+  },
+  {
+    size: "major",
+    polarity: "bad",
+    title: "Avalanche!",
+    description:
+      "A wall of snow thunders down the slope. You dive behind a rock. Your gear is partially buried.",
+    effect: (s) => ({
+      stamina: clamp(s.stamina - 25 * PACE_FACTORS[s.pace].damageMult, 0, 100),
+      foodSupply: Math.max(0, s.foodSupply - 3),
+      waterSupply: Math.max(0, +(s.waterSupply - 1.0).toFixed(1)),
+      progress: clamp(s.progress - 0.05, 0, 1),
+    }),
+  },
+  {
+    size: "major",
+    polarity: "bad",
+    title: "Massive Avalanche!",
+    description:
+      "The entire slope releases. A colossal river of snow engulfs everything. You're swept off your feet and tumble violently before clawing free.",
+    effect: (s) => ({
+      stamina: clamp(s.stamina - 40 * PACE_FACTORS[s.pace].damageMult, 0, 100),
+      foodSupply: Math.max(0, s.foodSupply - 5),
+      waterSupply: Math.max(0, +(s.waterSupply - 2.0).toFixed(1)),
+      progress: clamp(s.progress - 0.08, 0, 1),
+      sleep: clamp(s.sleep - 15, 0, 100),
+    }),
+  },
   {
     size: "major",
     polarity: "bad",
@@ -276,8 +330,20 @@ const MAJOR_BAD: Omit<GameEvent, "id">[] = [
     description:
       "The snow gives way beneath you and you plunge into a hidden crevasse. You fight to climb out.",
     effect: (s) => ({
-      stamina: clamp(s.stamina - (s.iceAxe ? 12 : 25) * PACE_FACTORS[s.pace].damageMult, 0, 100),
-      progress: clamp(s.progress - (s.iceAxe ? 0.01 : 0.04), 0, 1),
+      stamina: clamp(s.stamina - (s.iceAxe ? 12 : 35) * PACE_FACTORS[s.pace].damageMult, 0, 100),
+      progress: clamp(s.progress - (s.iceAxe ? 0.01 : 0.06), 0, 1),
+      sleep: clamp(s.sleep - 10, 0, 100),
+    }),
+  },
+  {
+    size: "major",
+    polarity: "bad",
+    title: "Major Rockfall",
+    description:
+      "A barrage of rocks breaks free from the face above. Boulders crash around you — there's nowhere to hide.",
+    effect: (s) => ({
+      stamina: clamp(s.stamina - 20 * PACE_FACTORS[s.pace].damageMult, 0, 100),
+      progress: clamp(s.progress - 0.03, 0, 1),
     }),
   },
 ];
@@ -293,23 +359,40 @@ function sampleFromPool(
   return { ...template, id: `evt-${++eventCounter}` };
 }
 
-export function rollHourlyEvents(state: GameState): GameEvent[] {
-  const n = Math.floor(Math.random() * 5) + 1;
-  const events: GameEvent[] = [];
+const ICE_ZONE_PROGRESS = 0.25;
 
-  const baseMajorChance = 0.25 + WEATHER_SEVERITY[state.weather] * 0.05;
-  const majorChance = baseMajorChance + avalancheRiskMod(state.timeOfDay);
+export function rollHourlyEvents(state: GameState): GameEvent[] {
+  if (Math.random() < 0.15) return [];
+
+  const n = Math.floor(Math.random() * 3) + 1;
+  const events: GameEvent[] = [];
+  const inIceZone = state.progress >= ICE_ZONE_PROGRESS;
+
+  const majorBadPool = inIceZone
+    ? [...MAJOR_BAD_BASE, ...MAJOR_BAD_ICE]
+    : MAJOR_BAD_BASE;
+
+  const baseMajorChance = inIceZone ? 0.35 : 0.15;
+  const majorChance = baseMajorChance
+    + WEATHER_SEVERITY[state.weather] * 0.05
+    + (inIceZone ? avalancheRiskMod(state.timeOfDay) : 0);
   const hasMajor = Math.random() < majorChance;
 
   if (hasMajor) {
-    const pool = Math.random() < 0.8 ? MAJOR_BAD : MAJOR_GOOD;
+    const pool = Math.random() < 0.85 ? majorBadPool : MAJOR_GOOD;
     events.push(sampleFromPool(pool));
   }
 
-  const badChance = PACE_FACTORS[state.pace].badChance;
-  const smallCount = Math.min(n - events.length, 4);
+  const smallBadPool = inIceZone
+    ? [...SMALL_BAD_BASE, ...SMALL_BAD_ICE]
+    : SMALL_BAD_BASE;
+
+  const badChance = inIceZone
+    ? Math.min(PACE_FACTORS[state.pace].badChance + 0.1, 0.95)
+    : PACE_FACTORS[state.pace].badChance;
+  const smallCount = Math.max(1, Math.min(n - events.length, 3));
   for (let i = 0; i < smallCount; i++) {
-    const pool = Math.random() < badChance ? SMALL_BAD : SMALL_GOOD;
+    const pool = Math.random() < badChance ? smallBadPool : SMALL_GOOD;
     events.push(sampleFromPool(pool));
   }
 
@@ -400,12 +483,13 @@ export function generateChoices(state: GameState): Choice[] {
         let dist = Math.max(0.005, s.doubleDistance ? baseDist * 2 : baseDist);
         if (sleepPenalty) dist *= 0.5;
         const effectiveSeverity = Math.max(0, WEATHER_SEVERITY[s.weather] - weatherRes);
-        const cost = (effectiveSeverity * 3 + 8 + fatigueExtra + layerWeight + Math.max(0, Math.round(gearStamTotal))) * paceFactor.stamina;
+        const cost = (effectiveSeverity * 3 + 12 + fatigueExtra + layerWeight + Math.max(0, Math.round(gearStamTotal))) * paceFactor.stamina;
         return {
           progress: clamp(s.progress + dist, 0, 1),
           stamina: clamp(s.stamina - cost, 0, 100),
-          hunger: clamp(s.hunger - 3 * paceFactor.hunger, 0, 100),
-          water: clamp(s.water - 2 * paceFactor.water, 0, 100),
+          hunger: clamp(s.hunger - 6 * paceFactor.hunger, 0, 100),
+          water: clamp(s.water - 5 * paceFactor.water, 0, 100),
+          sleep: clamp(s.sleep - 5, 0, 100),
           doubleDistance: false,
         };
       },
@@ -416,21 +500,13 @@ export function generateChoices(state: GameState): Choice[] {
   choices.push({
     label: "Rest & Recover",
     description: fatigueExtra > 0
-      ? `You need this${warningTag}. Less distance but some recovery.`
-      : "Catch your breath. Less distance but more stamina.",
-    apply: (s) => {
-      const baseRest = (0.015 + speedBonus * 0.5) * paceFactor.dist;
-      let dist = s.doubleDistance ? baseRest * 2 : baseRest;
-      if (sleepPenalty) dist *= 0.5;
-      const recovery = Math.max(0, (s.weather === "storm" ? 2 : 8) - fatigueExtra);
-      return {
-        progress: clamp(s.progress + dist, 0, 1),
-        stamina: clamp(s.stamina + recovery, 0, 100),
-        hunger: clamp(s.hunger - 2, 0, 100),
-        water: clamp(s.water - 1, 0, 100),
-        doubleDistance: false,
-      };
-    },
+      ? `You need this${warningTag}. Stay put and recover.`
+      : "Stop and catch your breath. No progress but you recover stamina and sleep.",
+    apply: (s) => ({
+      stamina: clamp(s.stamina + 20, 0, 100),
+      sleep: clamp(s.sleep + 20, 0, 100),
+      doubleDistance: false,
+    }),
   });
 
   // ── Pace changes ──
@@ -465,8 +541,10 @@ export function generateChoices(state: GameState): Choice[] {
     }
   }
 
+  const nearIceZone = state.progress >= 0.25;
+
   // ── Equip Crampons ──
-  if (!state.crampons) {
+  if (!state.crampons && nearIceZone) {
     const icy = iciness >= 0.5;
     choices.push({
       label: "Put On Crampons",
@@ -490,7 +568,7 @@ export function generateChoices(state: GameState): Choice[] {
   }
 
   // ── Equip Ice Axe ──
-  if (!state.iceAxe) {
+  if (!state.iceAxe && nearIceZone) {
     const icy = iciness >= 0.5;
     choices.push({
       label: "Ready Ice Axe",
@@ -550,7 +628,6 @@ export function generateChoices(state: GameState): Choice[] {
       apply: (s) => ({
         hunger: clamp(s.hunger + 30, 0, 100),
         foodSupply: Math.max(0, s.foodSupply - mealCost),
-        sleep: clamp(s.sleep - 2, 0, 100),
         doubleDistance: false,
       }),
     });
@@ -574,22 +651,19 @@ export function generateChoices(state: GameState): Choice[] {
 
   // ── Sleep in Hut (sets pendingSleep, transitions to waking phase) ──
   if (wp.shelter === "hut") {
-    const sleepMealCost = mealCost;
-    if (state.foodSupply >= sleepMealCost) {
-      choices.push({
-        label: "Sleep in Hut",
-        description: state.sleep < 25
-          ? `You can barely stand. The hut bunks are your only chance. Costs ${sleepMealCost} meal${sleepMealCost > 1 ? "s" : ""}.`
-          : state.sleep < 60
-            ? `Find a bunk in the mountain hut. Warm and safe. Costs ${sleepMealCost} meal${sleepMealCost > 1 ? "s" : ""}.`
-            : `Rest in the hut. Costs ${sleepMealCost} meal${sleepMealCost > 1 ? "s" : ""}.`,
-        apply: () => ({
-          pendingSleep: { type: "hut" as const, sleepBonus: 50, staminaBonus: 12, mealCost: sleepMealCost },
-          phase: "waking" as const,
-          doubleDistance: false,
-        }),
-      });
-    }
+    choices.push({
+      label: "Sleep in Hut",
+      description: state.sleep < 25
+        ? "You can barely stand. The hut has bunks, hot food, and water. Rest and resupply here."
+        : state.sleep < 60
+          ? "Find a bunk in the mountain hut. Warm, safe — they'll feed you and refill your water."
+          : "Rest in the hut. A good meal, water refill, and a warm bed await.",
+      apply: () => ({
+        pendingSleep: { type: "hut" as const, sleepBonus: 50, staminaBonus: 12, mealCost: 0 },
+        phase: "waking" as const,
+        doubleDistance: false,
+      }),
+    });
   }
 
   // ── Sleep in Tent (sets pendingSleep, transitions to waking phase) ──
@@ -627,18 +701,43 @@ export function generateChoices(state: GameState): Choice[] {
     });
   }
 
-  // ── Retreat Downhill ──
-  if (state.stamina < 30 && state.progress > 0.1) {
+  // ── Descend ──
+  if (state.progress > 0.02) {
+    const descDist = (0.04 + speedBonus) * paceFactor.dist;
     choices.push({
-      label: "Retreat Downhill",
-      description: "You're too weak to keep going. Fall back to recover — you'll lose progress.",
+      label: "Descend",
+      description: state.stamina < 30
+        ? "You're too weak to go on. Head back down — descending is easier on your body."
+        : "Turn around and head downhill. You'll lose altitude but conserve energy.",
       apply: (s) => ({
-        progress: clamp(s.progress - 0.05, 0, 1),
-        stamina: clamp(s.stamina + 15, 0, 100),
-        weather: improveWeather(s.weather),
+        progress: clamp(s.progress - descDist, 0, 1),
+        stamina: clamp(s.stamina - 4, 0, 100),
+        hunger: clamp(s.hunger - 3, 0, 100),
+        water: clamp(s.water - 2, 0, 100),
         doubleDistance: false,
       }),
     });
+  }
+
+  // ── Save Teammate ──
+  if (state.partySize > 1 && state.progress >= ICE_ZONE_PROGRESS) {
+    const hasCasualty = state.currentEvents.some(
+      (e) => e.polarity === "bad" && e.size === "major",
+    );
+    if (hasCasualty) {
+      choices.push({
+        label: "Save Teammate",
+        description:
+          "A teammate is in trouble. Dig them out and haul them to safety — it will cost you dearly.",
+        apply: (s) => ({
+          stamina: clamp(s.stamina - 25, 0, 100),
+          hunger: clamp(s.hunger - 10, 0, 100),
+          water: clamp(s.water - 5, 0, 100),
+          sleep: clamp(s.sleep - 10, 0, 100),
+          doubleDistance: false,
+        }),
+      });
+    }
   }
 
   return choices;
@@ -665,10 +764,17 @@ export function buildNarrative(
   if (tod < 5) timeContext = "The pre-dawn darkness envelops the mountain. Headlamps cut thin beams in the black.";
   else if (tod < 7) timeContext = "The first grey light of dawn creeps across the peaks.";
   else if (tod < 10) timeContext = "Morning light illuminates the route ahead.";
+  else if (tod < 12) timeContext = "The late morning sun climbs higher, warming the slopes.";
   else if (tod < 14) timeContext = "The midday sun beats down, softening the snow.";
   else if (tod < 17) timeContext = "The afternoon sun hangs low, shadows lengthening across the slopes.";
-  else if (tod < 20) timeContext = "Evening approaches. The light turns golden on the snow.";
-  else timeContext = "Darkness falls over the mountain. The temperature drops fast.";
+  else if (tod < 20) timeContext = "Evening approaches. The light turns golden on the snow. You should find a place to rest soon.";
+  else timeContext = "Darkness falls over the mountain. The temperature drops fast. You need to rest — hiking in the dark is dangerous.";
+
+  let timeAlert = "";
+  if (tod === 12) timeAlert = "☀️ It's noon — the day is half over.";
+  else if (tod === 0) timeAlert = "🌙 It's midnight.";
+  else if (tod === 20) timeAlert = "🌑 Night has fallen. Find shelter and rest before exhaustion takes hold.";
+  else if (tod === 5) timeAlert = "🌅 Dawn breaks over the Alps.";
 
   const tempLine = `Temperature: ${ambientTemp}°C (feels like ${effTemp}°C with ${state.layers} layer${state.layers !== 1 ? "s" : ""}).`;
 
@@ -701,7 +807,9 @@ export function buildNarrative(
     .map((e) => `\u2022 ${e.title}: ${e.description}`)
     .join("\n");
 
-  const parts = [wp.narrative, clockLine, timeContext, weatherLine, tempLine, terrainLine, gearLine, supplyLine];
+  const parts = [wp.narrative, clockLine, timeContext];
+  if (timeAlert) parts.push(timeAlert);
+  parts.push(weatherLine, tempLine, terrainLine, gearLine, supplyLine);
   if (paceDesc) parts.push(paceDesc);
   if (statusLine) parts.push(statusLine);
   parts.push(eventLines);

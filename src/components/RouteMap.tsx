@@ -59,11 +59,19 @@ export default function RouteMap({ progress }: Props) {
         {/* waypoint dots + labels */}
         {POINTS.map((p, i) => (
           <g key={i}>
-            <circle cx={p[0]} cy={p[1]} r="5" className="waypoint-dot" />
+            {WAYPOINTS[i].shelter === "hut" ? (
+              <g transform={`translate(${p[0]}, ${p[1]})`}>
+                <polygon points="-8,0 0,-10 8,0" className="hut-roof" />
+                <rect x="-6" y="0" width="12" height="8" rx="1" className="hut-body" />
+                <rect x="-2" y="3" width="4" height="5" className="hut-door" />
+              </g>
+            ) : (
+              <circle cx={p[0]} cy={p[1]} r="5" className="waypoint-dot" />
+            )}
             <text
               x={p[0] + 10}
               y={p[1] + 4}
-              className="waypoint-label"
+              className={`waypoint-label${WAYPOINTS[i].shelter === "hut" ? " waypoint-hut-label" : ""}`}
             >
               {WAYPOINTS[i].name}
             </text>

@@ -1,5 +1,5 @@
 import type { GameState, Action } from "../game/types";
-import { WEATHER_SEVERITY, formatTime } from "../game/types";
+import { WEATHER_SEVERITY, INLINE_ACTION_LABELS, formatTime } from "../game/types";
 import {
   altitudeAtProgress,
   currentWaypoint,
@@ -22,14 +22,7 @@ const WEATHER_ICON: Record<string, string> = {
   storm: "\u26A1",
 };
 
-export const INLINE_CHOICE_LABELS = new Set([
-  "Add a Layer",
-  "Remove a Layer",
-  "Put On Crampons",
-  "Take Off Crampons",
-  "Ready Ice Axe",
-  "Stow Ice Axe",
-]);
+export const INLINE_CHOICE_LABELS = INLINE_ACTION_LABELS;
 
 interface Props {
   state: GameState;
@@ -154,6 +147,9 @@ export default function ClimbOverview({ state, dispatch }: Props) {
         <span className={`stat-value supply-value ${state.foodSupply <= 2 ? "supply-critical" : ""}`}>
           {state.foodSupply} meal{state.foodSupply !== 1 ? "s" : ""}
         </span>
+        <div className="inline-actions">
+          {renderInlineBtn("Eat a Meal", "🍽️ Eat")}
+        </div>
       </div>
 
       <div className="stat-group">
@@ -161,6 +157,9 @@ export default function ClimbOverview({ state, dispatch }: Props) {
         <span className={`stat-value supply-value ${state.waterSupply <= 0.5 ? "supply-critical" : ""}`}>
           {state.waterSupply.toFixed(1)} L
         </span>
+        <div className="inline-actions">
+          {renderInlineBtn("Drink Water", "💧 Drink")}
+        </div>
       </div>
 
       <div className="supply-divider" />
