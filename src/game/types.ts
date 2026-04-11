@@ -34,6 +34,44 @@ export interface HourLog {
 
 // ── preparation config ───────────────────────────────────────
 
+export type Difficulty = "easy" | "normal" | "hard";
+
+export interface DifficultyModifiers {
+  drainMult: number;
+  staminaCostMult: number;
+  eventBadChanceMod: number;
+  majorEventChanceMod: number;
+  startingStaminaBonus: number;
+  startingSupplyMult: number;
+}
+
+export const DIFFICULTY_MODS: Record<Difficulty, DifficultyModifiers> = {
+  easy: {
+    drainMult: 0.5,
+    staminaCostMult: 0.5,
+    eventBadChanceMod: -0.1,
+    majorEventChanceMod: -0.1,
+    startingStaminaBonus: 15,
+    startingSupplyMult: 1.5,
+  },
+  normal: {
+    drainMult: 1.0,
+    staminaCostMult: 1.0,
+    eventBadChanceMod: 0,
+    majorEventChanceMod: 0,
+    startingStaminaBonus: 0,
+    startingSupplyMult: 1.0,
+  },
+  hard: {
+    drainMult: 1.8,
+    staminaCostMult: 1.6,
+    eventBadChanceMod: 0.15,
+    majorEventChanceMod: 0.15,
+    startingStaminaBonus: -15,
+    startingSupplyMult: 0.7,
+  },
+};
+
 export type GearOption = "lightweight" | "standard" | "alpine_pro";
 export type FoodOption = "energy_bars" | "full_meals" | "minimal";
 export type RouteOption = "gouter" | "three_monts" | "grand_mulets";
@@ -94,7 +132,8 @@ export interface PendingSleep {
 // ── game state ───────────────────────────────────────────────
 
 export interface GameState {
-  phase: "title" | "preparation" | "climbing" | "waking" | "summit" | "failed";
+  phase: "title" | "difficulty" | "preparation" | "climbing" | "waking" | "summit" | "failed";
+  difficulty: Difficulty;
   hoursHiked: number;
   timeOfDay: number;        // 0–23
   progress: number;          // 0–1
@@ -123,6 +162,7 @@ export interface GameState {
 
 export const INITIAL_STATE: GameState = {
   phase: "title",
+  difficulty: "normal",
   hoursHiked: 0,
   timeOfDay: 5,
   progress: 0,
@@ -161,6 +201,8 @@ export const INLINE_ACTION_LABELS = new Set([
 ]);
 
 export type Action =
+  | { type: "START_GAME" }
+  | { type: "SET_DIFFICULTY"; difficulty: Difficulty }
   | { type: "START_PREP" }
   | { type: "SET_PREP"; config: PrepConfig }
   | { type: "CONFIRM_PREP" }

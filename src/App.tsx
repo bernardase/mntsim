@@ -4,6 +4,7 @@ import { gameReducer } from "./game/reducer";
 import ClimbOverview from "./components/ClimbOverview";
 import RouteMap from "./components/RouteMap";
 import SituationPanel from "./components/SituationPanel";
+import DifficultyScreen from "./components/DifficultyScreen";
 import PreparationScreen from "./components/PreparationScreen";
 import WakeUpScreen from "./components/WakeUpScreen";
 import "./App.css";
@@ -24,13 +25,17 @@ export default function App() {
           </p>
           <button
             className="start-btn"
-            onClick={() => dispatch({ type: "START_PREP" })}
+            onClick={() => dispatch({ type: "START_GAME" })}
           >
             Begin Climb
           </button>
         </div>
       </div>
     );
+  }
+
+  if (state.phase === "difficulty") {
+    return <DifficultyScreen dispatch={dispatch} />;
   }
 
   if (state.phase === "preparation") {
@@ -112,7 +117,7 @@ export default function App() {
         <ClimbOverview state={state} dispatch={dispatch} />
       </aside>
       <main className="col col-center">
-        <RouteMap progress={state.progress} />
+        <RouteMap progress={state.progress} route={state.prepConfig.route} />
       </main>
       <aside className="col col-right">
         <SituationPanel state={state} dispatch={dispatch} />

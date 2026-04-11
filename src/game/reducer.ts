@@ -1,5 +1,5 @@
 import type { Action, GameState, Weather } from "./types";
-import { INITIAL_STATE, DEFAULT_PREP, INLINE_ACTION_LABELS } from "./types";
+import { INITIAL_STATE, DEFAULT_PREP, INLINE_ACTION_LABELS, DIFFICULTY_MODS } from "./types";
 import {
   rollHourlyEvents,
   applyEvents,
@@ -11,6 +11,9 @@ import {
   altitudeAtProgress,
   temperatureAt,
   effectiveTemperature,
+  icinessAtProgress,
+  timeOfDayIcinessMod,
+  setActiveRoute,
 } from "./route";
 import {
   computeModifiers,
@@ -41,12 +44,27 @@ function driftWeather(current: Weather, progress: number): Weather {
 
 export function gameReducer(state: GameState, action: Action): GameState {
   switch (action.type) {
-    case "START_PREP": {
+    case "START_GAME": {
       return {
         ...INITIAL_STATE,
+        phase: "difficulty",
+      };
+    }
+
+    case "SET_DIFFICULTY": {
+      return {
+        ...state,
+        difficulty: action.difficulty,
         phase: "preparation",
         prepConfig: DEFAULT_PREP,
         prepModifiers: computeModifiers(DEFAULT_PREP),
+      };
+    }
+
+    case "START_PREP": {
+      return {
+        ...INITIAL_STATE,
+        phase: "difficulty",
       };
     }
 
@@ -60,11 +78,13 @@ export function gameReducer(state: GameState, action: Action): GameState {
     }
 
     case "CONFIRM_PREP": {
+      setActiveRoute(state.prepConfig.route);
       const mods = state.prepModifiers;
-      const stamina = computeStartingStamina(mods);
+      const diff = DIFFICULTY_MODS[state.difficulty];
+      const stamina = clamp(computeStartingStamina(mods) + diff.startingStaminaBonus, 30, 100);
       const hunger = computeStartingHunger(mods);
-      const foodSupply = computeStartingFoodSupply(state.prepConfig);
-      const waterSupply = computeStartingWaterSupply(state.prepConfig);
+      const foodSupply = Math.round(computeStartingFoodSupply(state.prepConfig) * diff.startingSupplyMult);
+      const waterSupply = +(computeStartingWaterSupply(state.prepConfig) * diff.startingSupplyMult).toFixed(1);
       const wp = currentWaypoint(0);
       const partySize = state.prepConfig.party;
       const startHour = state.prepConfig.startHour;
@@ -74,6 +94,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
       const startState: GameState = {
         ...INITIAL_STATE,
         phase: "climbing",
+        difficulty: state.difficulty,
         hoursHiked: 0,
         timeOfDay: startHour,
         stamina,
@@ -106,12 +127,19 @@ export function gameReducer(state: GameState, action: Action): GameState {
     case "ADVANCE_HOUR": {
       if (state.phase !== "climbing") return state;
 
+      const diff = DIFFICULTY_MODS[state.difficulty];
       const events = rollHourlyEvents(state);
       let next = applyEvents(state, events);
 
       const alt = altitudeAtProgress(next.progress);
       const ambientTemp = temperatureAt(alt, next.weather, next.timeOfDay);
       const effTemp = effectiveTemperature(ambientTemp, next.layers);
+      const iciness = clamp(icinessAtProgress(next.progress) + timeOfDayIcinessMod(next.timeOfDay), 0, 1);
+
+      const terrainMult = 1.0 + iciness;
+      const gearPenalty = iciness >= 0.5
+        ? (next.crampons ? 0 : 3) + (next.iceAxe ? 0 : 2)
+        : 0;
 
       let waterDrain = 3;
       if (effTemp > 10) waterDrain += 2;
@@ -127,16 +155,17 @@ export function gameReducer(state: GameState, action: Action): GameState {
       const driftedWeather = driftWeather(next.weather, next.progress);
 
       const HOURS_PER_STEP = 2;
+      const dm = diff.drainMult;
 
       next = {
         ...next,
         hoursHiked: state.hoursHiked + HOURS_PER_STEP,
         timeOfDay: (state.timeOfDay + HOURS_PER_STEP) % 24,
         weather: driftedWeather,
-        hunger: clamp(next.hunger - 8 * HOURS_PER_STEP, 0, 100),
-        sleep: clamp(next.sleep - 6 * HOURS_PER_STEP, 0, 100),
-        water: clamp(next.water - waterDrain * HOURS_PER_STEP, 0, 100),
-        stamina: clamp(next.stamina - (3 + coldDrain) * HOURS_PER_STEP, 0, 100),
+        hunger: clamp(next.hunger - Math.round(8 * terrainMult * dm) * HOURS_PER_STEP, 0, 100),
+        sleep: clamp(next.sleep - Math.round(6 * terrainMult * dm) * HOURS_PER_STEP, 0, 100),
+        water: clamp(next.water - Math.round(waterDrain * terrainMult * dm) * HOURS_PER_STEP, 0, 100),
+        stamina: clamp(next.stamina - (0.5 + coldDrain * 0.3 + gearPenalty * 0.3) * HOURS_PER_STEP * terrainMult * dm, 0, 100),
         currentEvents: events,
         log: [...state.log, { hour: state.hoursHiked, events }],
       };

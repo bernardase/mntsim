@@ -1,47 +1,39 @@
-import { WAYPOINTS } from "../game/route";
+import type { RouteOption } from "../game/types";
+import { ROUTE_DATA } from "../game/route";
 
 interface Props {
   progress: number;
+  route: RouteOption;
 }
 
-const POINTS: [number, number][] = [
-  [80, 440],   // Chamonix
-  [100, 400],  // Les Houches
-  [140, 340],  // Goûter Hut Trail
-  [180, 280],  // Grand Couloir
-  [220, 220],  // Goûter Hut
-  [270, 170],  // Dôme du Goûter
-  [300, 145],  // Vallot Shelter
-  [340, 100],  // Bosses Ridge
-  [370, 50],   // Summit
-];
-
-function pathD(): string {
-  return POINTS.map((p, i) => `${i === 0 ? "M" : "L"} ${p[0]} ${p[1]}`).join(" ");
+function pathD(points: [number, number][]): string {
+  return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p[0]} ${p[1]}`).join(" ");
 }
 
-function interpolate(progress: number): [number, number] {
-  if (progress <= 0) return POINTS[0];
-  if (progress >= 1) return POINTS[POINTS.length - 1];
+function interpolate(progress: number, route: RouteOption): [number, number] {
+  const { waypoints, points } = ROUTE_DATA[route];
+  if (progress <= 0) return points[0];
+  if (progress >= 1) return points[points.length - 1];
 
   let lower = 0;
-  for (let i = 1; i < WAYPOINTS.length; i++) {
-    if (WAYPOINTS[i].progress >= progress) {
+  for (let i = 1; i < waypoints.length; i++) {
+    if (waypoints[i].progress >= progress) {
       lower = i - 1;
       break;
     }
   }
   const upper = lower + 1;
   const seg =
-    (progress - WAYPOINTS[lower].progress) /
-    (WAYPOINTS[upper].progress - WAYPOINTS[lower].progress || 1);
-  const x = POINTS[lower][0] + seg * (POINTS[upper][0] - POINTS[lower][0]);
-  const y = POINTS[lower][1] + seg * (POINTS[upper][1] - POINTS[lower][1]);
+    (progress - waypoints[lower].progress) /
+    (waypoints[upper].progress - waypoints[lower].progress || 1);
+  const x = points[lower][0] + seg * (points[upper][0] - points[lower][0]);
+  const y = points[lower][1] + seg * (points[upper][1] - points[lower][1]);
   return [x, y];
 }
 
-export default function RouteMap({ progress }: Props) {
-  const [px, py] = interpolate(progress);
+export default function RouteMap({ progress, route }: Props) {
+  const { waypoints, points } = ROUTE_DATA[route];
+  const [px, py] = interpolate(progress, route);
 
   return (
     <div className="route-map">
@@ -54,12 +46,12 @@ export default function RouteMap({ progress }: Props) {
         />
 
         {/* route line */}
-        <path d={pathD()} className="route-path" />
+        <path d={pathD(points)} className="route-path" />
 
         {/* waypoint dots + labels */}
-        {POINTS.map((p, i) => (
+        {points.map((p, i) => (
           <g key={i}>
-            {WAYPOINTS[i].shelter === "hut" ? (
+            {waypoints[i].shelter === "hut" ? (
               <g transform={`translate(${p[0]}, ${p[1]})`}>
                 <polygon points="-8,0 0,-10 8,0" className="hut-roof" />
                 <rect x="-6" y="0" width="12" height="8" rx="1" className="hut-body" />
@@ -71,9 +63,9 @@ export default function RouteMap({ progress }: Props) {
             <text
               x={p[0] + 10}
               y={p[1] + 4}
-              className={`waypoint-label${WAYPOINTS[i].shelter === "hut" ? " waypoint-hut-label" : ""}`}
+              className={`waypoint-label${waypoints[i].shelter === "hut" ? " waypoint-hut-label" : ""}`}
             >
-              {WAYPOINTS[i].name}
+              {waypoints[i].name}
             </text>
           </g>
         ))}

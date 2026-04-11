@@ -367,11 +367,11 @@ body,
   font-weight: 600;
 }
 
-.terrain-trail { color: var(--good); }
-.terrain-rocky { color: #fbbf24; }
-.terrain-mixed { color: #fb923c; }
-.terrain-snow  { color: #60a5fa; }
-.terrain-ice   { color: #93c5fd; }
+.terrain-trail    { color: var(--good); }
+.terrain-rocky    { color: #fbbf24; }
+.terrain-icyrock  { color: #e87930; }
+.terrain-snow     { color: #60a5fa; }
+.terrain-ice      { color: #93c5fd; }
 
 .weather-warn {
   color: var(--bad);
@@ -880,6 +880,110 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
+/* ── difficulty screen ──────────────────────────────────── */
+
+.difficulty-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  padding: 2rem;
+}
+
+.difficulty-container {
+  max-width: 900px;
+  width: 100%;
+  text-align: center;
+}
+
+.difficulty-container h1 {
+  font-size: 2.2rem;
+  color: #e0e0e0;
+  margin-bottom: 0.25rem;
+}
+
+.difficulty-subtitle {
+  color: #9e9e9e;
+  font-size: 0.95rem;
+  margin-bottom: 2rem;
+}
+
+.difficulty-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.difficulty-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 2rem 1.5rem;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: #e0e0e0;
+  font-family: inherit;
+}
+
+.difficulty-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.difficulty-easy:hover {
+  border-color: #4caf50;
+  box-shadow: 0 8px 24px rgba(76, 175, 80, 0.25);
+}
+
+.difficulty-normal:hover {
+  border-color: #ffc107;
+  box-shadow: 0 8px 24px rgba(255, 193, 7, 0.25);
+}
+
+.difficulty-hard:hover {
+  border-color: #f44336;
+  box-shadow: 0 8px 24px rgba(244, 67, 54, 0.25);
+}
+
+.difficulty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.difficulty-card h2 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+.difficulty-desc {
+  color: #bdbdbd;
+  font-size: 0.9rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.difficulty-details {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  text-align: left;
+  font-size: 0.82rem;
+  color: #9e9e9e;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.difficulty-details li::before {
+  content: "• ";
+  color: #757575;
+}
+
 /* ── responsive ─────────────────────────────────────────── */
 
 @media (max-width: 900px) {
@@ -914,5 +1018,11 @@ body,
 
   .wakeup-options {
     grid-template-columns: 1fr;
+  }
+
+  .difficulty-cards {
+    grid-template-columns: 1fr;
+    max-width: 360px;
+    margin: 0 auto;
   }
 }

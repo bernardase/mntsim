@@ -166,7 +166,7 @@ export default function ClimbOverview({ state, dispatch }: Props) {
 
       <div className="stat-group">
         <label>Terrain</label>
-        <span className={`stat-value terrain-tag terrain-${terrain.toLowerCase()}`}>
+        <span className={`stat-value terrain-tag terrain-${terrain.toLowerCase().replace(/\s+/g, "")}`}>
           {terrain}
           {iciness >= 0.5 && !state.crampons && (
             <span className="gear-warn"> — need crampons!</span>

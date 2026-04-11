@@ -1,5 +1,5 @@
 import type { GameEvent, GameState, Weather, Choice, Pace } from "./types";
-import { WEATHER_SEVERITY, PACE_FACTORS, formatTime } from "./types";
+import { WEATHER_SEVERITY, PACE_FACTORS, DIFFICULTY_MODS, formatTime } from "./types";
 import {
   currentWaypoint as getWaypoint,
   altitudeAtProgress,
@@ -359,14 +359,51 @@ function sampleFromPool(
   return { ...template, id: `evt-${++eventCounter}` };
 }
 
+const SMALL_BAD_ROCKY: Omit<GameEvent, "id">[] = [
+  {
+    size: "small",
+    polarity: "bad",
+    title: "Scrambling Slip",
+    description: "Your hand slips on a wet hold. You scrape your palms catching yourself on the rock.",
+    effect: (s) => ({ stamina: clamp(s.stamina - 7 * PACE_FACTORS[s.pace].damageMult, 0, 100) }),
+  },
+  {
+    size: "small",
+    polarity: "bad",
+    title: "Rockfall",
+    description: "Rocks clatter down from the face above. You press flat against the wall until it passes.",
+    effect: (s) => ({ stamina: clamp(s.stamina - 10 * PACE_FACTORS[s.pace].damageMult, 0, 100) }),
+  },
+  {
+    size: "small",
+    polarity: "bad",
+    title: "Wrong Route",
+    description: "You follow a false trail and have to double back. Time and energy wasted.",
+    effect: (s) => ({
+      stamina: clamp(s.stamina - 5, 0, 100),
+      progress: clamp(s.progress - 0.01, 0, 1),
+    }),
+  },
+  {
+    size: "small",
+    polarity: "bad",
+    title: "Ankle Twist",
+    description: "You land badly on uneven rock and twist your ankle. Every step stings.",
+    effect: (s) => ({ stamina: clamp(s.stamina - 8, 0, 100) }),
+  },
+];
+
+const ROCKY_PROGRESS = 0.10;
 const ICE_ZONE_PROGRESS = 0.25;
 
 export function rollHourlyEvents(state: GameState): GameEvent[] {
   if (Math.random() < 0.15) return [];
 
+  const diff = DIFFICULTY_MODS[state.difficulty];
   const n = Math.floor(Math.random() * 3) + 1;
   const events: GameEvent[] = [];
   const inIceZone = state.progress >= ICE_ZONE_PROGRESS;
+  const inRockyZone = state.progress >= ROCKY_PROGRESS && !inIceZone;
 
   const majorBadPool = inIceZone
     ? [...MAJOR_BAD_BASE, ...MAJOR_BAD_ICE]
@@ -375,8 +412,9 @@ export function rollHourlyEvents(state: GameState): GameEvent[] {
   const baseMajorChance = inIceZone ? 0.35 : 0.15;
   const majorChance = baseMajorChance
     + WEATHER_SEVERITY[state.weather] * 0.05
-    + (inIceZone ? avalancheRiskMod(state.timeOfDay) : 0);
-  const hasMajor = Math.random() < majorChance;
+    + (inIceZone ? avalancheRiskMod(state.timeOfDay) : 0)
+    + diff.majorEventChanceMod;
+  const hasMajor = Math.random() < clamp(majorChance, 0, 0.95);
 
   if (hasMajor) {
     const pool = Math.random() < 0.85 ? majorBadPool : MAJOR_GOOD;
@@ -385,14 +423,16 @@ export function rollHourlyEvents(state: GameState): GameEvent[] {
 
   const smallBadPool = inIceZone
     ? [...SMALL_BAD_BASE, ...SMALL_BAD_ICE]
-    : SMALL_BAD_BASE;
+    : inRockyZone
+      ? [...SMALL_BAD_BASE, ...SMALL_BAD_ROCKY]
+      : SMALL_BAD_BASE;
 
-  const badChance = inIceZone
+  const badChance = (inIceZone
     ? Math.min(PACE_FACTORS[state.pace].badChance + 0.1, 0.95)
-    : PACE_FACTORS[state.pace].badChance;
+    : PACE_FACTORS[state.pace].badChance) + diff.eventBadChanceMod;
   const smallCount = Math.max(1, Math.min(n - events.length, 3));
   for (let i = 0; i < smallCount; i++) {
-    const pool = Math.random() < badChance ? smallBadPool : SMALL_GOOD;
+    const pool = Math.random() < clamp(badChance, 0, 0.95) ? smallBadPool : SMALL_GOOD;
     events.push(sampleFromPool(pool));
   }
 
@@ -418,6 +458,7 @@ export function generateChoices(state: GameState): Choice[] {
 
   const speedBonus = state.prepModifiers?.baseSpeedBonus ?? 0;
   const weatherRes = state.prepModifiers?.weatherResistance ?? 0;
+  const diff = DIFFICULTY_MODS[state.difficulty];
   const wp = getWaypoint(state.progress);
   const alt = altitudeAtProgress(state.progress);
   const ambientTemp = temperatureAt(alt, state.weather, state.timeOfDay);
@@ -483,13 +524,13 @@ export function generateChoices(state: GameState): Choice[] {
         let dist = Math.max(0.005, s.doubleDistance ? baseDist * 2 : baseDist);
         if (sleepPenalty) dist *= 0.5;
         const effectiveSeverity = Math.max(0, WEATHER_SEVERITY[s.weather] - weatherRes);
-        const cost = (effectiveSeverity * 3 + 12 + fatigueExtra + layerWeight + Math.max(0, Math.round(gearStamTotal))) * paceFactor.stamina;
+        const cost = (effectiveSeverity * 1 + 3 + fatigueExtra * 0.3 + layerWeight * 0.3 + Math.max(0, Math.round(gearStamTotal) * 0.3)) * paceFactor.stamina * diff.staminaCostMult;
         return {
           progress: clamp(s.progress + dist, 0, 1),
           stamina: clamp(s.stamina - cost, 0, 100),
-          hunger: clamp(s.hunger - 6 * paceFactor.hunger, 0, 100),
-          water: clamp(s.water - 5 * paceFactor.water, 0, 100),
-          sleep: clamp(s.sleep - 5, 0, 100),
+          hunger: clamp(s.hunger - 6 * paceFactor.hunger * diff.drainMult, 0, 100),
+          water: clamp(s.water - 5 * paceFactor.water * diff.drainMult, 0, 100),
+          sleep: clamp(s.sleep - 5 * diff.drainMult, 0, 100),
           doubleDistance: false,
         };
       },
@@ -618,7 +659,7 @@ export function generateChoices(state: GameState): Choice[] {
   }
 
   // ── Eat a Meal ──
-  if (state.hunger < 70 && state.foodSupply >= mealCost) {
+  if (state.foodSupply >= mealCost) {
     const urgent = state.hunger < 30;
     choices.push({
       label: "Eat a Meal",
@@ -634,7 +675,7 @@ export function generateChoices(state: GameState): Choice[] {
   }
 
   // ── Drink Water ──
-  if (state.water < 70 && state.waterSupply >= drinkCost) {
+  if (state.waterSupply >= drinkCost) {
     const urgent = state.water < 30;
     choices.push({
       label: "Drink Water",
@@ -711,9 +752,9 @@ export function generateChoices(state: GameState): Choice[] {
         : "Turn around and head downhill. You'll lose altitude but conserve energy.",
       apply: (s) => ({
         progress: clamp(s.progress - descDist, 0, 1),
-        stamina: clamp(s.stamina - 4, 0, 100),
-        hunger: clamp(s.hunger - 3, 0, 100),
-        water: clamp(s.water - 2, 0, 100),
+        stamina: clamp(s.stamina - 2 * diff.staminaCostMult, 0, 100),
+        hunger: clamp(s.hunger - 3 * diff.drainMult, 0, 100),
+        water: clamp(s.water - 2 * diff.drainMult, 0, 100),
         doubleDistance: false,
       }),
     });
@@ -730,10 +771,10 @@ export function generateChoices(state: GameState): Choice[] {
         description:
           "A teammate is in trouble. Dig them out and haul them to safety — it will cost you dearly.",
         apply: (s) => ({
-          stamina: clamp(s.stamina - 25, 0, 100),
-          hunger: clamp(s.hunger - 10, 0, 100),
-          water: clamp(s.water - 5, 0, 100),
-          sleep: clamp(s.sleep - 10, 0, 100),
+          stamina: clamp(s.stamina - 25 * diff.staminaCostMult, 0, 100),
+          hunger: clamp(s.hunger - 10 * diff.drainMult, 0, 100),
+          water: clamp(s.water - 5 * diff.drainMult, 0, 100),
+          sleep: clamp(s.sleep - 10 * diff.drainMult, 0, 100),
           doubleDistance: false,
         }),
       });
