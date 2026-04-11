@@ -133,7 +133,7 @@ body,
 
 .game-layout {
   display: grid;
-  grid-template-columns: 260px 1fr 340px;
+  grid-template-columns: 260px 1fr 420px;
   height: 100vh;
   overflow: hidden;
 }
