@@ -1,5 +1,12 @@
 import type { GameEvent, GameState, Weather, Choice, Pace } from "./types";
-import { WEATHER_SEVERITY, PACE_FACTORS, DIFFICULTY_MODS, formatTime } from "./types";
+import {
+  WEATHER_SEVERITY,
+  PACE_FACTORS,
+  DIFFICULTY_MODS,
+  formatTime,
+  formatTrailElapsed,
+  ROLL_NO_EVENT_CHANCE,
+} from "./types";
 import {
   currentWaypoint as getWaypoint,
   altitudeAtProgress,
@@ -315,6 +322,7 @@ const MAJOR_BAD_ICE: Omit<GameEvent, "id">[] = [
     title: "Massive Avalanche!",
     description:
       "The entire slope releases. A colossal river of snow engulfs everything. You're swept off your feet and tumble violently before clawing free.",
+    lethal: true,
     effect: (s) => ({
       stamina: clamp(s.stamina - 40 * PACE_FACTORS[s.pace].damageMult, 0, 100),
       foodSupply: Math.max(0, s.foodSupply - 5),
@@ -341,6 +349,7 @@ const MAJOR_BAD_ICE: Omit<GameEvent, "id">[] = [
     title: "Major Rockfall",
     description:
       "A barrage of rocks breaks free from the face above. Boulders crash around you — there's nowhere to hide.",
+    lethal: true,
     effect: (s) => ({
       stamina: clamp(s.stamina - 20 * PACE_FACTORS[s.pace].damageMult, 0, 100),
       progress: clamp(s.progress - 0.03, 0, 1),
@@ -357,6 +366,31 @@ function sampleFromPool(
 ): GameEvent {
   const template = pick(pool);
   return { ...template, id: `evt-${++eventCounter}` };
+}
+
+/** Rockfall / avalanche-class events affected by exposure detour. */
+const EXPOSURE_EVENT_TITLES = new Set([
+  "Rockfall",
+  "Small Avalanche",
+  "Avalanche!",
+  "Massive Avalanche!",
+  "Major Rockfall",
+]);
+
+function sampleFromPoolDetour(
+  pool: Omit<GameEvent, "id">[],
+  detour: boolean,
+): GameEvent {
+  if (!detour) return sampleFromPool(pool);
+  const template = pick(pool);
+  let chosen = template;
+  if (EXPOSURE_EVENT_TITLES.has(template.title)) {
+    const safe = pool.filter((t) => !EXPOSURE_EVENT_TITLES.has(t.title));
+    if (safe.length > 0 && Math.random() < 0.58) {
+      chosen = pick(safe);
+    }
+  }
+  return { ...chosen, id: `evt-${++eventCounter}` };
 }
 
 const SMALL_BAD_ROCKY: Omit<GameEvent, "id">[] = [
@@ -393,11 +427,66 @@ const SMALL_BAD_ROCKY: Omit<GameEvent, "id">[] = [
   },
 ];
 
-const ROCKY_PROGRESS = 0.10;
-const ICE_ZONE_PROGRESS = 0.25;
+export const ROCKY_PROGRESS = 0.10;
+export const ICE_ZONE_PROGRESS = 0.25;
+
+export function countCriticalBodyStats(state: GameState): number {
+  let n = 0;
+  if (state.stamina < 5) n++;
+  if (state.hunger < 5) n++;
+  if (state.sleep < 5) n++;
+  if (state.water < 5) n++;
+  return n;
+}
+
+/** Map 0–100 risk score to transmitter display 1–5 (always at least 1 when in a risk zone). */
+export function transmitRiskOnFive(percent: number): number {
+  if (percent <= 0) return 1;
+  return clamp(Math.ceil(percent / 20), 1, 5);
+}
+
+/** Display 0–100 risk hints for the mountain “transmitter” (terrain, weather, temp, pace, detour). */
+export function computeTransmitRisks(state: GameState): { avalanche: number; rockfall: number } {
+  const inIce = state.progress >= ICE_ZONE_PROGRESS;
+  const inRocky = state.progress >= ROCKY_PROGRESS && !inIce;
+  if (!inIce && !inRocky) {
+    return { avalanche: 0, rockfall: 0 };
+  }
+  const alt = altitudeAtProgress(state.progress);
+  const ambient = temperatureAt(alt, state.weather, state.timeOfDay);
+  const eff = effectiveTemperature(ambient, state.layers);
+
+  const sev = WEATHER_SEVERITY[state.weather];
+  const paceMult = state.pace === "fast" ? 1.12 : state.pace === "slow" ? 0.88 : 1;
+  const avyMod = inIce ? avalancheRiskMod(state.timeOfDay) : 0;
+  let avalanche = 0;
+  if (inIce) {
+    avalanche = (0.28 + avyMod + sev * 0.06 + (state.weather === "storm" ? 0.12 : 0)) * paceMult * 100;
+    if (eff > 8) avalanche += (eff - 8) * 1.1;
+    if (eff > 14) avalanche += 7;
+    if (eff < -10) avalanche -= 6;
+  }
+  let rockfall = 0;
+  if (inRocky) {
+    rockfall = (0.22 + sev * 0.05 + (state.weather === "wind" || state.weather === "storm" ? 0.1 : 0)) * paceMult * 100;
+    if (eff >= -2 && eff <= 6) rockfall += 9;
+    if (eff > 12) rockfall += 6;
+  } else if (inIce) {
+    rockfall = (0.14 + sev * 0.04) * paceMult * 100;
+    if (eff >= -2 && eff <= 6) rockfall += 7;
+  }
+  if (state.detourAvoidingExposure) {
+    avalanche *= 0.42;
+    rockfall *= 0.42;
+  }
+  return {
+    avalanche: Math.round(clamp(avalanche, 0, 100)),
+    rockfall: Math.round(clamp(rockfall, 0, 100)),
+  };
+}
 
 export function rollHourlyEvents(state: GameState): GameEvent[] {
-  if (Math.random() < 0.15) return [];
+  if (Math.random() < ROLL_NO_EVENT_CHANCE) return [];
 
   const diff = DIFFICULTY_MODS[state.difficulty];
   const n = Math.floor(Math.random() * 3) + 1;
@@ -418,7 +507,11 @@ export function rollHourlyEvents(state: GameState): GameEvent[] {
 
   if (hasMajor) {
     const pool = Math.random() < 0.85 ? majorBadPool : MAJOR_GOOD;
-    events.push(sampleFromPool(pool));
+    events.push(
+      state.detourAvoidingExposure && pool !== MAJOR_GOOD
+        ? sampleFromPoolDetour(pool, true)
+        : sampleFromPool(pool),
+    );
   }
 
   const smallBadPool = inIceZone
@@ -433,7 +526,11 @@ export function rollHourlyEvents(state: GameState): GameEvent[] {
   const smallCount = Math.max(1, Math.min(n - events.length, 3));
   for (let i = 0; i < smallCount; i++) {
     const pool = Math.random() < clamp(badChance, 0, 0.95) ? smallBadPool : SMALL_GOOD;
-    events.push(sampleFromPool(pool));
+    events.push(
+      state.detourAvoidingExposure && pool !== SMALL_GOOD
+        ? sampleFromPoolDetour(pool, true)
+        : sampleFromPool(pool),
+    );
   }
 
   return events;
@@ -523,6 +620,7 @@ export function generateChoices(state: GameState): Choice[] {
         const baseDist = (0.04 + speedBonus + gearSpeedTotal) * paceFactor.dist;
         let dist = Math.max(0.005, s.doubleDistance ? baseDist * 2 : baseDist);
         if (sleepPenalty) dist *= 0.5;
+        if (s.detourAvoidingExposure) dist *= 0.74;
         const effectiveSeverity = Math.max(0, WEATHER_SEVERITY[s.weather] - weatherRes);
         const cost = (effectiveSeverity * 1 + 3 + fatigueExtra * 0.3 + layerWeight * 0.3 + Math.max(0, Math.round(gearStamTotal) * 0.3)) * paceFactor.stamina * diff.staminaCostMult;
         return {
@@ -549,6 +647,24 @@ export function generateChoices(state: GameState): Choice[] {
       doubleDistance: false,
     }),
   });
+
+  // ── Reroute (exposure detour: safer, slower progress) ──
+  if (state.progress >= ROCKY_PROGRESS) {
+    if (!state.detourAvoidingExposure) {
+      choices.push({
+        label: "Reroute",
+        description:
+          "Take a safer line around the worst exposure. Slower progress; lowers avalanche and rockfall risk on the transmitter.",
+        apply: () => ({ detourAvoidingExposure: true, doubleDistance: false }),
+      });
+    } else {
+      choices.push({
+        label: "Resume main line",
+        description: "Return to the direct route. Faster climbing, more exposure to rockfall and slides.",
+        apply: () => ({ detourAvoidingExposure: false, doubleDistance: false }),
+      });
+    }
+  }
 
   // ── Pace changes ──
   const paceOptions: { pace: Pace; label: string; desc: string }[] = [
@@ -729,16 +845,26 @@ export function generateChoices(state: GameState): Choice[] {
 
   // ── Shelter in Place ──
   if (WEATHER_SEVERITY[state.weather] >= 3) {
+    const isStorm = state.weather === "storm";
     choices.push({
       label: "Shelter in Place",
-      description: state.weather === "storm"
-        ? "The storm is too dangerous to move in. Hunker down and wait it out."
-        : "Wait for the weather to pass. No progress but safe.",
-      apply: (s) => ({
-        stamina: clamp(s.stamina + 3, 0, 100),
-        weather: improveWeather(s.weather),
-        doubleDistance: false,
-      }),
+      description: isStorm
+        ? "Hunker down in the storm — same recovery as resting, with cover from wind and spindrift."
+        : "Wait for the weather to ease. Light recovery while conditions improve.",
+      apply: (s) =>
+        isStorm
+          ? {
+              stamina: clamp(s.stamina + 20, 0, 100),
+              sleep: clamp(s.sleep + 20, 0, 100),
+              weather: improveWeather(s.weather),
+              doubleDistance: false,
+            }
+          : {
+              stamina: clamp(s.stamina + 8, 0, 100),
+              sleep: clamp(s.sleep + 8, 0, 100),
+              weather: improveWeather(s.weather),
+              doubleDistance: false,
+            },
     });
   }
 
@@ -798,77 +924,81 @@ export function buildNarrative(
   const terrain = terrainLabel(iciness);
   const weatherLine = weatherDescription(state.weather);
 
-  const clockLine = `Time: ${formatTime(state.timeOfDay)} (${state.hoursHiked} hour${state.hoursHiked !== 1 ? "s" : ""} hiked)`;
-
   const tod = state.timeOfDay;
-  let timeContext = "";
-  if (tod < 5) timeContext = "The pre-dawn darkness envelops the mountain. Headlamps cut thin beams in the black.";
-  else if (tod < 7) timeContext = "The first grey light of dawn creeps across the peaks.";
-  else if (tod < 10) timeContext = "Morning light illuminates the route ahead.";
-  else if (tod < 12) timeContext = "The late morning sun climbs higher, warming the slopes.";
-  else if (tod < 14) timeContext = "The midday sun beats down, softening the snow.";
-  else if (tod < 17) timeContext = "The afternoon sun hangs low, shadows lengthening across the slopes.";
-  else if (tod < 20) timeContext = "Evening approaches. The light turns golden on the snow. You should find a place to rest soon.";
-  else timeContext = "Darkness falls over the mountain. The temperature drops fast. You need to rest — hiking in the dark is dangerous.";
+  let timeBrief = "";
+  if (tod < 5) timeBrief = "Deep night.";
+  else if (tod < 7) timeBrief = "Before full dawn.";
+  else if (tod < 10) timeBrief = "Morning.";
+  else if (tod < 12) timeBrief = "Late morning.";
+  else if (tod < 14) timeBrief = "Midday heat on snow.";
+  else if (tod < 17) timeBrief = "Afternoon.";
+  else if (tod < 20) timeBrief = "Evening — consider camp.";
+  else timeBrief = "Dark — rest soon.";
 
+  const dayMins = Math.round((((tod % 24) + 24) % 24) * 60) % (24 * 60);
   let timeAlert = "";
-  if (tod === 12) timeAlert = "☀️ It's noon — the day is half over.";
-  else if (tod === 0) timeAlert = "🌙 It's midnight.";
-  else if (tod === 20) timeAlert = "🌑 Night has fallen. Find shelter and rest before exhaustion takes hold.";
-  else if (tod === 5) timeAlert = "🌅 Dawn breaks over the Alps.";
+  if (dayMins === 12 * 60) timeAlert = "Noon.";
+  else if (dayMins === 0) timeAlert = "Midnight.";
+  else if (dayMins === 20 * 60) timeAlert = "Night — find shelter.";
+  else if (dayMins === 5 * 60) timeAlert = "Dawn.";
 
-  const tempLine = `Temperature: ${ambientTemp}°C (feels like ${effTemp}°C with ${state.layers} layer${state.layers !== 1 ? "s" : ""}).`;
+  const statusLine = pickTopWarnings(state, effTemp, iciness, 2);
 
-  const terrainLine = `Terrain: ${terrain}${iciness >= 0.5 ? " — crampons and ice axe recommended." : "."}`;
+  const compactStatus = [
+    `${formatTime(state.timeOfDay)} · ${formatTrailElapsed(state.hoursHiked)} on trail`,
+    `${terrain} · ${ambientTemp}°C (feels ${effTemp}°C)`,
+  ].join("\n");
 
-  const gearParts: string[] = [];
-  gearParts.push(state.crampons ? "Crampons: on" : "Crampons: off");
-  gearParts.push(state.iceAxe ? "Ice axe: ready" : "Ice axe: stowed");
-  const gearLine = gearParts.join(" | ");
-
-  const supplyLine = `Supplies: ${state.foodSupply} meal${state.foodSupply !== 1 ? "s" : ""}, ${state.waterSupply.toFixed(1)}L water.`;
-
-  const paceDesc = state.pace === "slow" ? "You're moving at a cautious pace."
-    : state.pace === "fast" ? "You're pushing hard and fast."
+  const paceBit = state.pace === "slow" ? "Pace: slow."
+    : state.pace === "fast" ? "Pace: fast."
     : "";
 
-  const statusWarnings: string[] = [];
-  if (state.water < 30) statusWarnings.push("You're dangerously dehydrated.");
-  if (state.hunger < 30) statusWarnings.push("Your stomach aches with hunger.");
-  if (state.sleep < 30) statusWarnings.push("Your eyelids are heavy — you need sleep.");
-  if (effTemp < -5) statusWarnings.push("The cold is biting through your clothes.");
-  if (effTemp > 15) statusWarnings.push("You're sweating heavily in the heat.");
-  if (state.foodSupply <= 2) statusWarnings.push("Food supplies are critically low.");
-  if (state.waterSupply <= 0.5) statusWarnings.push("Water supplies are almost gone.");
-  if (iciness >= 0.5 && !state.crampons) statusWarnings.push("Your boots slip on the ice — you need crampons.");
-  if (iciness >= 0.5 && !state.iceAxe) statusWarnings.push("Without an ice axe, a fall here could be fatal.");
-  const statusLine = statusWarnings.length > 0 ? statusWarnings.join(" ") : "";
+  const eventLines = events.length > 0
+    ? events.map((e) => `\u2022 ${e.title}`).join("\n")
+    : "";
 
-  const eventLines = events
-    .map((e) => `\u2022 ${e.title}: ${e.description}`)
-    .join("\n");
-
-  const parts = [wp.narrative, clockLine, timeContext];
+  const parts: string[] = [wp.narrative, compactStatus, weatherLine];
   if (timeAlert) parts.push(timeAlert);
-  parts.push(weatherLine, tempLine, terrainLine, gearLine, supplyLine);
-  if (paceDesc) parts.push(paceDesc);
+  else parts.push(timeBrief);
+  if (paceBit) parts.push(paceBit);
   if (statusLine) parts.push(statusLine);
-  parts.push(eventLines);
+  if (eventLines) parts.push(eventLines);
 
   return parts.join("\n\n");
+}
+
+function pickTopWarnings(
+  state: GameState,
+  effTemp: number,
+  iciness: number,
+  max: number,
+): string {
+  const scored: { score: number; text: string }[] = [];
+  if (state.water < 30) scored.push({ score: 100, text: "Critically dehydrated." });
+  if (state.hunger < 30) scored.push({ score: 99, text: "Starving." });
+  if (state.sleep < 30) scored.push({ score: 98, text: "Need sleep." });
+  if (iciness >= 0.5 && !state.iceAxe) scored.push({ score: 95, text: "Ice — no axe." });
+  if (iciness >= 0.5 && !state.crampons) scored.push({ score: 94, text: "Ice — no crampons." });
+  if (state.waterSupply <= 0.5) scored.push({ score: 90, text: "Almost no water left." });
+  if (state.foodSupply <= 2) scored.push({ score: 89, text: "Almost no food left." });
+  if (effTemp < -5) scored.push({ score: 40, text: "Very cold." });
+  if (effTemp > 15) scored.push({ score: 40, text: "Too hot — sweating." });
+  scored.sort((a, b) => b.score - a.score);
+  const picked = scored.slice(0, max);
+  return picked.map((x) => x.text).join(" ");
 }
 
 function weatherDescription(w: Weather): string {
   switch (w) {
     case "clear":
-      return "The sky is clear and blue. Perfect climbing conditions.";
+      return "Clear sky, good visibility.";
     case "cloudy":
-      return "Clouds gather around the peaks, but visibility is decent.";
+      return "Cloud around peaks, OK visibility.";
     case "wind":
-      return "Strong gusts batter the ridge. You lean into the wind.";
+      return "Strong wind on the ridge.";
     case "snow":
-      return "Snow falls steadily, muffling sound and covering the trail.";
+      return "Steady snow.";
     case "storm":
-      return "A ferocious storm rages. Survival is the only priority.";
+      return "Storm — dangerous.";
   }
 }

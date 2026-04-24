@@ -1,5 +1,5 @@
 import { useReducer } from "react";
-import { INITIAL_STATE } from "./game/types";
+import { INITIAL_STATE, formatTrailElapsed } from "./game/types";
 import { gameReducer } from "./game/reducer";
 import ClimbOverview from "./components/ClimbOverview";
 import RouteMap from "./components/RouteMap";
@@ -18,11 +18,7 @@ export default function App() {
         <div className="title-card">
           <h1>Mont Blanc</h1>
           <p className="subtitle">Summit Simulator</p>
-          <p className="tagline">
-            4,808 m &middot; The highest peak in the Alps.
-            <br />
-            Will you reach the top?
-          </p>
+          <p className="tagline">4,808 m — Alps summit simulator.</p>
           <button
             className="start-btn"
             onClick={() => dispatch({ type: "START_GAME" })}
@@ -63,7 +59,7 @@ export default function App() {
             ))}
           </div>
           <div className="end-stats">
-            <span>Hours Hiked: {state.hoursHiked}</span>
+            <span>On trail: {formatTrailElapsed(state.hoursHiked)}</span>
             <span>Stamina: {Math.round(state.stamina)}</span>
           </div>
           <div className="summit-actions">
@@ -96,7 +92,7 @@ export default function App() {
             ))}
           </div>
           <div className="end-stats">
-            <span>Hours Hiked: {state.hoursHiked}</span>
+            <span>On trail: {formatTrailElapsed(state.hoursHiked)}</span>
             <span>Stamina: {Math.round(state.stamina)}</span>
             <span>Progress: {Math.round(state.progress * 100)}%</span>
           </div>
@@ -117,7 +113,7 @@ export default function App() {
         <ClimbOverview state={state} dispatch={dispatch} />
       </aside>
       <main className="col col-center">
-        <RouteMap progress={state.progress} route={state.prepConfig.route} />
+        <RouteMap state={state} />
       </main>
       <aside className="col col-right">
         <SituationPanel state={state} dispatch={dispatch} />

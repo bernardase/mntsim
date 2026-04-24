@@ -18,6 +18,8 @@ export interface GameEvent {
   title: string;
   description: string;
   effect: (state: GameState) => Partial<GameState>;
+  /** If true, this event ends the climb when it occurs (after effects apply). */
+  lethal?: boolean;
 }
 
 export interface Choice {
@@ -134,8 +136,8 @@ export interface PendingSleep {
 export interface GameState {
   phase: "title" | "difficulty" | "preparation" | "climbing" | "waking" | "summit" | "failed";
   difficulty: Difficulty;
-  hoursHiked: number;
-  timeOfDay: number;        // 0–23
+  hoursHiked: number;       // cumulative hours on trail (fractional ok)
+  timeOfDay: number;        // clock 0–24 (fractional hours; advances each main action)
   progress: number;          // 0–1
   stamina: number;           // 0–100
   hunger: number;            // 0–100 (body fullness)
@@ -151,13 +153,15 @@ export interface GameState {
   weather: Weather;
   doubleDistance: boolean;
   pendingSleep: PendingSleep | null;
-  mainActionsThisHour: number;    // max 1 per hour
+  mainActionsThisHour: number;    // max 1 per clock step (each main action)
   currentEvents: GameEvent[];
   choices: Choice[];
   narrative: string;
   log: HourLog[];
   prepConfig: PrepConfig;
   prepModifiers: PrepModifiers;
+  /** Safer line above the ice zone: slower progress, lower rockfall/avalanche event weight. */
+  detourAvoidingExposure: boolean;
 }
 
 export const INITIAL_STATE: GameState = {
@@ -187,6 +191,7 @@ export const INITIAL_STATE: GameState = {
   log: [],
   prepConfig: DEFAULT_PREP,
   prepModifiers: ZERO_MODIFIERS,
+  detourAvoidingExposure: false,
 };
 
 export const INLINE_ACTION_LABELS = new Set([
@@ -206,14 +211,37 @@ export type Action =
   | { type: "START_PREP" }
   | { type: "SET_PREP"; config: PrepConfig }
   | { type: "CONFIRM_PREP" }
+  /** Advances game clock one step (not a full real hour). */
   | { type: "ADVANCE_HOUR" }
   | { type: "CHOOSE"; index: number }
   | { type: "WAKE_UP"; wakeHour: number }
   | { type: "BEGIN_DESCENT" };
 
-export function formatTime(hour: number): string {
-  const h = ((hour % 24) + 24) % 24;
-  const period = h < 12 ? "AM" : "PM";
-  const display = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${display}:00 ${period}`;
+/** Wall-clock advance per main action (20 minutes). */
+export const GAME_CLOCK_STEP_HOURS = 20 / 60;
+
+/** Stat-drain multiplier per main action (unchanged from prior tuning). */
+export const GAME_STAT_STEP_MULT = 2;
+
+/** Chance hourly roll returns no events (restful / quiet step). */
+export const ROLL_NO_EVENT_CHANCE = 0.38;
+
+export function formatTime(clockHours: number): string {
+  const hRaw = ((clockHours % 24) + 24) % 24;
+  const totalMinutes = Math.round(hRaw * 60) % (24 * 60);
+  const h24 = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  const period = h24 < 12 ? "AM" : "PM";
+  const displayH = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
+  return `${displayH}:${mins.toString().padStart(2, "0")} ${period}`;
+}
+
+/** Cumulative trail time for UI (e.g. "2 h 20 min"). */
+export function formatTrailElapsed(trailHours: number): string {
+  const m = Math.round(trailHours * 60);
+  if (m <= 0) return "0 min";
+  if (m < 60) return `${m} min`;
+  const hr = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem === 0 ? `${hr} h` : `${hr} h ${rem} min`;
 }

@@ -21,6 +21,17 @@ function tradeoffDesc(hour: StartHourOption): string {
   }
 }
 
+function tradeoffTag(hour: StartHourOption): string {
+  switch (hour) {
+    case 3: return "Coldest, low avy risk";
+    case 4: return "Cold, hard snow";
+    case 5: return "Classic balance";
+    case 6: return "Warmer, softer ice";
+    case 7: return "Late, more avy risk";
+    case 8: return "Very late, high risk";
+  }
+}
+
 export default function WakeUpScreen({ state, dispatch }: Props) {
   const ps = state.pendingSleep;
   if (!ps) return null;
@@ -28,6 +39,7 @@ export default function WakeUpScreen({ state, dispatch }: Props) {
   const wp = currentWaypoint(state.progress);
   const drinkCost = waterCostPerDrink(state.partySize);
   const waterPerHour = +(drinkCost * 0.3).toFixed(2);
+  const shelter = ps.type === "hut" ? "Hut" : "Tent";
 
   function sleepHours(wakeHour: number): number {
     let d = wakeHour - state.timeOfDay;
@@ -39,10 +51,9 @@ export default function WakeUpScreen({ state, dispatch }: Props) {
     <div className="wakeup-screen">
       <div className="wakeup-container">
         <div className="wakeup-header">
-          <h1>Choose Wake-Up Time</h1>
+          <h1>Wake up</h1>
           <p className="wakeup-subtitle">
-            You're sleeping in a <strong>{ps.type === "hut" ? "mountain hut" : "tent"}</strong> at{" "}
-            <strong>{wp.name}</strong>. It's currently <strong>{formatTime(state.timeOfDay)}</strong>.
+            {shelter} · {wp.name} · {formatTime(state.timeOfDay)}
           </p>
         </div>
 
@@ -53,14 +64,16 @@ export default function WakeUpScreen({ state, dispatch }: Props) {
             return (
               <button
                 key={wh}
+                type="button"
                 className="wakeup-tile"
+                title={tradeoffDesc(wh)}
                 onClick={() => dispatch({ type: "WAKE_UP", wakeHour: wh })}
               >
                 <span className="wakeup-time">{formatTime(wh)}</span>
                 <span className="wakeup-hours">{hours}h sleep</span>
-                <span className="wakeup-tradeoff">{tradeoffDesc(wh)}</span>
+                <span className="wakeup-tradeoff">{tradeoffTag(wh)}</span>
                 <span className="wakeup-cost">
-                  Cost: {ps.mealCost} meal{ps.mealCost > 1 ? "s" : ""}, {waterUsed}L water
+                  {ps.mealCost} meal{ps.mealCost > 1 ? "s" : ""}, {waterUsed}L water
                 </span>
               </button>
             );

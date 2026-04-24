@@ -1,5 +1,6 @@
 import type { GameState, Action } from "../game/types";
-import { WEATHER_SEVERITY, INLINE_ACTION_LABELS, formatTime } from "../game/types";
+import { WEATHER_SEVERITY, INLINE_ACTION_LABELS, formatTime, formatTrailElapsed } from "../game/types";
+import { ROCKY_PROGRESS } from "../game/events";
 import {
   altitudeAtProgress,
   currentWaypoint,
@@ -38,6 +39,7 @@ export default function ClimbOverview({ state, dispatch }: Props) {
   const effTemp = effectiveTemperature(ambientTemp, state.layers);
   const iciness = clamp(icinessAtProgress(state.progress) + timeOfDayIcinessMod(state.timeOfDay), 0, 1);
   const terrain = terrainLabel(iciness);
+  const showRiskHint = state.progress >= ROCKY_PROGRESS;
 
   function choiceIndex(label: string): number {
     return state.choices.findIndex((c) => c.label === label);
@@ -59,7 +61,11 @@ export default function ClimbOverview({ state, dispatch }: Props) {
 
   return (
     <div className="climb-overview">
-      <h2>Climb Overview</h2>
+      <h2>Status</h2>
+
+      {showRiskHint && (
+        <p className="map-risk-hint">Avalanche and rockfall readout on the map.</p>
+      )}
 
       <div className="stat-group">
         <label>Time</label>
@@ -67,8 +73,8 @@ export default function ClimbOverview({ state, dispatch }: Props) {
       </div>
 
       <div className="stat-group">
-        <label>Hours Hiked</label>
-        <span className="stat-value">{state.hoursHiked}</span>
+        <label>On trail</label>
+        <span className="stat-value">{formatTrailElapsed(state.hoursHiked)}</span>
       </div>
 
       <div className="stat-group">
@@ -143,7 +149,7 @@ export default function ClimbOverview({ state, dispatch }: Props) {
       <div className="supply-divider" />
 
       <div className="stat-group">
-        <label>Food Supply</label>
+        <label>Food</label>
         <span className={`stat-value supply-value ${state.foodSupply <= 2 ? "supply-critical" : ""}`}>
           {state.foodSupply} meal{state.foodSupply !== 1 ? "s" : ""}
         </span>
@@ -153,7 +159,7 @@ export default function ClimbOverview({ state, dispatch }: Props) {
       </div>
 
       <div className="stat-group">
-        <label>Water Supply</label>
+        <label>Water</label>
         <span className={`stat-value supply-value ${state.waterSupply <= 0.5 ? "supply-critical" : ""}`}>
           {state.waterSupply.toFixed(1)} L
         </span>
@@ -169,7 +175,10 @@ export default function ClimbOverview({ state, dispatch }: Props) {
         <span className={`stat-value terrain-tag terrain-${terrain.toLowerCase().replace(/\s+/g, "")}`}>
           {terrain}
           {iciness >= 0.5 && !state.crampons && (
-            <span className="gear-warn"> — need crampons!</span>
+            <span className="gear-warn"> — crampons!</span>
+          )}
+          {iciness >= 0.5 && !state.iceAxe && (
+            <span className="gear-warn"> — axe!</span>
           )}
         </span>
       </div>
@@ -178,10 +187,10 @@ export default function ClimbOverview({ state, dispatch }: Props) {
         <label>Equipment</label>
         <div className="gear-row">
           <span className={`gear-badge ${state.crampons ? "gear-on" : "gear-off"}`}>
-            Crampons {state.crampons ? "ON" : "OFF"}
+            Crampons {state.crampons ? "on" : "off"}
           </span>
           <span className={`gear-badge ${state.iceAxe ? "gear-on" : "gear-off"}`}>
-            Ice Axe {state.iceAxe ? "READY" : "STOWED"}
+            Axe {state.iceAxe ? "out" : "stowed"}
           </span>
         </div>
         <div className="inline-actions">
@@ -201,11 +210,11 @@ export default function ClimbOverview({ state, dispatch }: Props) {
 
       <div className="stat-group">
         <label>Temperature</label>
-        <span className="stat-value">
+        <span
+          className={`stat-value temp-ambient ${effTemp < -5 ? "temp-cold" : effTemp > 15 ? "temp-hot" : ""}`}
+          title={`Feels ${effTemp}°C with ${state.layers} layer${state.layers !== 1 ? "s" : ""}`}
+        >
           {ambientTemp}°C
-          <span className={`temp-feels ${effTemp < -5 ? "temp-cold" : effTemp > 15 ? "temp-hot" : ""}`}>
-            {" "}(feels {effTemp}°C)
-          </span>
         </span>
       </div>
 
@@ -227,12 +236,12 @@ export default function ClimbOverview({ state, dispatch }: Props) {
         <label>Weather</label>
         <span className="stat-value">
           {WEATHER_ICON[state.weather]} {state.weather}
-          {severity >= 3 && <span className="weather-warn"> (dangerous)</span>}
+          {severity >= 3 && <span className="weather-warn"> — rough</span>}
         </span>
       </div>
 
       {state.doubleDistance && (
-        <div className="buff-badge">Next move: 2x distance</div>
+        <div className="buff-badge">Next: 2× distance</div>
       )}
     </div>
   );

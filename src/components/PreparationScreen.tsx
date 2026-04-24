@@ -41,11 +41,12 @@ function OptionGroup<K extends string | number>({
           return (
             <button
               key={String(key)}
+              type="button"
               className={`prep-tile ${active ? "prep-tile-active" : ""}`}
+              title={opt.description}
               onClick={() => onSelect(key)}
             >
               <strong>{opt.label}</strong>
-              <span>{opt.description}</span>
             </button>
           );
         })}
@@ -69,11 +70,8 @@ export default function PreparationScreen({ config, modifiers, dispatch }: Props
     <div className="prep-screen">
       <div className="prep-container">
         <div className="prep-header">
-          <h1>Prepare Your Climb</h1>
-          <p className="prep-subtitle">
-            Choose your gear, food, route, schedule, training, party size, and start time.
-            Each decision affects your stats, supplies, and chances on the mountain.
-          </p>
+          <h1>Prepare</h1>
+          <p className="prep-subtitle">Pick options, then start.</p>
         </div>
 
         <div className="prep-body">
@@ -123,10 +121,10 @@ export default function PreparationScreen({ config, modifiers, dispatch }: Props
           </div>
 
           <div className="prep-preview">
-            <h3>Stats Preview</h3>
+            <h3>Preview</h3>
 
             <div className="preview-stat">
-              <label>Starting Stamina</label>
+              <label>Stamina</label>
               <div className="bar-track">
                 <div
                   className={`bar-fill bar-stamina ${stamina < 50 ? "bar-danger" : ""}`}
@@ -137,7 +135,7 @@ export default function PreparationScreen({ config, modifiers, dispatch }: Props
             </div>
 
             <div className="preview-stat">
-              <label>Starting Hunger</label>
+              <label>Hunger</label>
               <div className="bar-track">
                 <div
                   className={`bar-fill bar-hunger ${hunger < 60 ? "bar-danger" : ""}`}
@@ -148,7 +146,7 @@ export default function PreparationScreen({ config, modifiers, dispatch }: Props
             </div>
 
             <div className="preview-stat">
-              <label>Weather Resistance</label>
+              <label>Weather resist.</label>
               <span className="preview-value">
                 {modifiers.weatherResistance > 0 && "+"}
                 {modifiers.weatherResistance}
@@ -156,7 +154,7 @@ export default function PreparationScreen({ config, modifiers, dispatch }: Props
             </div>
 
             <div className="preview-stat">
-              <label>Speed Modifier</label>
+              <label>Speed</label>
               <span className="preview-value">
                 {speed.toFixed(3)} / move
                 {modifiers.baseSpeedBonus !== 0 && (

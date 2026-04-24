@@ -1,8 +1,16 @@
-import type { Action, GameState, Weather } from "./types";
-import { INITIAL_STATE, DEFAULT_PREP, INLINE_ACTION_LABELS, DIFFICULTY_MODS } from "./types";
+import type { Action, GameState, GameEvent, Weather } from "./types";
+import {
+  INITIAL_STATE,
+  DEFAULT_PREP,
+  INLINE_ACTION_LABELS,
+  DIFFICULTY_MODS,
+  GAME_CLOCK_STEP_HOURS,
+  GAME_STAT_STEP_MULT,
+} from "./types";
 import {
   rollHourlyEvents,
   applyEvents,
+  countCriticalBodyStats,
   generateChoices,
   buildNarrative,
 } from "./events";
@@ -23,6 +31,15 @@ import {
   computeStartingWaterSupply,
   waterCostPerDrink,
 } from "./preparation";
+
+function lethalFailureSuffix(events: GameEvent[]): string {
+  const lethal = events.find((e) => e.lethal);
+  if (!lethal) return "";
+  if (lethal.title.includes("Avalanche")) {
+    return "\n\nThe mass of snow and ice doesn't release you. The climb ends here.";
+  }
+  return "\n\nThe rockfall is catastrophic. You don't get back up.";
+}
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
@@ -109,12 +126,10 @@ export function gameReducer(state: GameState, action: Action): GameState {
         pendingSleep: null,
         prepConfig: state.prepConfig,
         prepModifiers: mods,
+        detourAvoidingExposure: false,
         narrative:
           wp.narrative +
-          "\n\nThe sky is clear and blue. Perfect climbing conditions.\n\n" +
-          partyLine +
-          ` You carry ${foodSupply} meals and ${waterSupply.toFixed(1)}L of water.` +
-          ` It's ${startHour}:00 AM.`,
+          `\n\nClear skies. ${partyLine} ${foodSupply} meals, ${waterSupply.toFixed(1)}L water. Start ${startHour}:00 AM.`,
         currentEvents: [],
         choices: [],
       };
@@ -154,63 +169,43 @@ export function gameReducer(state: GameState, action: Action): GameState {
 
       const driftedWeather = driftWeather(next.weather, next.progress);
 
-      const HOURS_PER_STEP = 2;
+      const sm = GAME_STAT_STEP_MULT;
       const dm = diff.drainMult;
+      const newClock = state.timeOfDay + GAME_CLOCK_STEP_HOURS;
+      const timeOfDay = Math.round((((newClock % 24) + 24) % 24) * 1e4) / 1e4;
 
       next = {
         ...next,
-        hoursHiked: state.hoursHiked + HOURS_PER_STEP,
-        timeOfDay: (state.timeOfDay + HOURS_PER_STEP) % 24,
+        hoursHiked: Math.round((state.hoursHiked + GAME_CLOCK_STEP_HOURS) * 1e4) / 1e4,
+        timeOfDay,
         weather: driftedWeather,
-        hunger: clamp(next.hunger - Math.round(8 * terrainMult * dm) * HOURS_PER_STEP, 0, 100),
-        sleep: clamp(next.sleep - Math.round(6 * terrainMult * dm) * HOURS_PER_STEP, 0, 100),
-        water: clamp(next.water - Math.round(waterDrain * terrainMult * dm) * HOURS_PER_STEP, 0, 100),
-        stamina: clamp(next.stamina - (0.5 + coldDrain * 0.3 + gearPenalty * 0.3) * HOURS_PER_STEP * terrainMult * dm, 0, 100),
+        hunger: clamp(next.hunger - Math.round(8 * terrainMult * dm) * sm, 0, 100),
+        sleep: clamp(next.sleep - Math.round(6 * terrainMult * dm) * sm, 0, 100),
+        water: clamp(next.water - Math.round(waterDrain * terrainMult * dm) * sm, 0, 100),
+        stamina: clamp(next.stamina - (0.5 + coldDrain * 0.3 + gearPenalty * 0.3) * sm * terrainMult * dm, 0, 100),
         currentEvents: events,
         log: [...state.log, { hour: state.hoursHiked, events }],
       };
 
-      if (next.water <= 0) {
+      const narrativeBase = buildNarrative(next, events);
+      if (events.some((e) => e.lethal)) {
         return {
           ...next,
           phase: "failed",
-          narrative:
-            buildNarrative(next, events) +
-            "\n\nYou have no water left. Severe dehydration takes hold — you can't go on.",
+          narrative: narrativeBase + lethalFailureSuffix(events),
           choices: [],
+          currentEvents: events,
         };
       }
-
-      if (next.hunger <= 0) {
+      if (countCriticalBodyStats(next) >= 2) {
         return {
           ...next,
           phase: "failed",
           narrative:
-            buildNarrative(next, events) +
-            "\n\nYou have no food left. Starved and exhausted, you cannot take another step.",
+            narrativeBase +
+            "\n\nStamina, fuel, sleep, and hydration have all crashed. You can't continue safely.",
           choices: [],
-        };
-      }
-
-      if (next.sleep <= 0) {
-        return {
-          ...next,
-          phase: "failed",
-          narrative:
-            buildNarrative(next, events) +
-            "\n\nYou haven't slept in too long. Your vision blurs and your legs buckle. You collapse from exhaustion.",
-          choices: [],
-        };
-      }
-
-      if (next.stamina <= 0) {
-        return {
-          ...next,
-          phase: "failed",
-          narrative:
-            buildNarrative(next, events) +
-            "\n\nYour body gives out. You cannot continue. The mountain wins today.",
-          choices: [],
+          currentEvents: events,
         };
       }
 
@@ -220,13 +215,13 @@ export function gameReducer(state: GameState, action: Action): GameState {
           phase: "summit",
           progress: 1,
           narrative:
-            buildNarrative(next, events) +
+            narrativeBase +
             "\n\nYou stand on the summit of Mont Blanc. 4,808 metres. The world stretches below you.",
           choices: [],
         };
       }
 
-      const narrative = buildNarrative(next, events);
+      const narrative = narrativeBase;
       const choices = generateChoices(next);
       return { ...next, narrative, choices };
     }
@@ -254,42 +249,12 @@ export function gameReducer(state: GameState, action: Action): GameState {
         return next;
       }
 
-      if (next.water <= 0) {
-        return {
-          ...next,
-          phase: "failed",
-          narrative: "Completely dehydrated. Your body seizes up.\nThe mountain wins today.",
-          choices: [],
-          currentEvents: [],
-        };
-      }
-
-      if (next.hunger <= 0) {
-        return {
-          ...next,
-          phase: "failed",
-          narrative: "You have nothing left to eat. Starved and broken, you collapse.\nThe mountain wins today.",
-          choices: [],
-          currentEvents: [],
-        };
-      }
-
-      if (next.sleep <= 0) {
-        return {
-          ...next,
-          phase: "failed",
-          narrative: "You can't keep your eyes open. You collapse from exhaustion.\nThe mountain wins today.",
-          choices: [],
-          currentEvents: [],
-        };
-      }
-
-      if (next.stamina <= 0) {
+      if (countCriticalBodyStats(next) >= 2) {
         return {
           ...next,
           phase: "failed",
           narrative:
-            "Your strength is spent. You collapse in the snow.\nThe mountain wins today.",
+            "Your body is shutting down on multiple fronts at once.\nThe mountain wins today.",
           choices: [],
           currentEvents: [],
         };
@@ -310,6 +275,18 @@ export function gameReducer(state: GameState, action: Action): GameState {
       if (!isInline) {
         next = { ...next, mainActionsThisHour: 0 };
         return gameReducer(next, { type: "ADVANCE_HOUR" });
+      }
+
+      if (countCriticalBodyStats(next) >= 2) {
+        return {
+          ...next,
+          phase: "failed",
+          narrative:
+            buildNarrative(next, []) +
+            "\n\nYour body is shutting down on multiple fronts at once.\nThe mountain wins today.",
+          choices: [],
+          currentEvents: [],
+        };
       }
 
       const choices = generateChoices(next);
@@ -368,11 +345,13 @@ export function gameReducer(state: GameState, action: Action): GameState {
         };
       }
 
-      if (next.hunger <= 0 || next.stamina <= 0 || next.water <= 0 || next.sleep <= 0) {
+      if (countCriticalBodyStats(next) >= 2) {
         return {
           ...next,
           phase: "failed",
-          narrative: "You wake too weak to continue. The mountain wins today.",
+          narrative:
+            buildNarrative(next, []) +
+            "\n\nYou wake into a body that can't safely continue.\nThe mountain wins today.",
           choices: [],
           currentEvents: [],
         };
@@ -390,6 +369,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
         phase: "climbing",
         progress: 0.98,
         mainActionsThisHour: 0,
+        detourAvoidingExposure: false,
       };
       const narrative = buildNarrative(next, []);
       const choices = generateChoices(next);

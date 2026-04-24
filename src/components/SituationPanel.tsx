@@ -14,6 +14,8 @@ const ACTION_ICONS: Record<string, string> = {
   "Shelter in Place": "🛡️",
   "Descend": "⬇️",
   "Save Teammate": "🤝",
+  Reroute: "🔀",
+  "Resume main line": "➡️",
 };
 
 interface Props {
@@ -28,8 +30,6 @@ export default function SituationPanel({ state, dispatch }: Props) {
 
   return (
     <div className="situation-panel">
-      <h2>Situation</h2>
-
       <div className="narrative">
         {state.narrative.split("\n").map((line, i) => (
           <p key={i}>{line}</p>
@@ -38,15 +38,14 @@ export default function SituationPanel({ state, dispatch }: Props) {
 
       {state.currentEvents.length > 0 && (
         <div className="events-list">
-          <h3>Events This Hour</h3>
           {state.currentEvents.map((ev) => (
             <div
               key={ev.id}
               className={`event-card event-${ev.polarity} event-${ev.size}`}
+              title={ev.description}
             >
               <strong>{ev.title}</strong>
               {ev.size === "major" && <span className="major-badge">MAJOR</span>}
-              <p>{ev.description}</p>
             </div>
           ))}
         </div>
@@ -54,11 +53,12 @@ export default function SituationPanel({ state, dispatch }: Props) {
 
       {mainChoices.length > 0 && (
         <div className="choices">
-          <h3>What do you do?</h3>
           {mainChoices.map(({ choice, index }) => (
             <button
               key={index}
-              className="choice-btn"
+              type="button"
+              className={`choice-btn${choice.label === "Reroute" ? " choice-reroute" : ""}`}
+              title={choice.description}
               onClick={() => dispatch({ type: "CHOOSE", index })}
               disabled={state.mainActionsThisHour >= 1}
             >
@@ -68,7 +68,6 @@ export default function SituationPanel({ state, dispatch }: Props) {
                 )}
                 {choice.label}
               </strong>
-              <span>{choice.description}</span>
             </button>
           ))}
         </div>
